@@ -3,38 +3,78 @@ import * as echarts from 'echarts';
 import type { ECharts, EChartsOption } from 'echarts';
 import { StockItem } from '@/app/page';
 
-// 匹配 ECharts 原生 Tooltip 参数结构（兼容 value 为数组的情况）
-interface CustomTooltipParam {
-    name?: string;                 // X轴日期
-    seriesName?: string;           // 系列名（如“收盘价”）
-    value?: number | any[];        // 支持数字或数组（原生类型要求）
-    [key: string]: any;            // 兼容其他潜在字段
-}
-type CustomTooltipParams = CustomTooltipParam | CustomTooltipParam[];
-
 // 组件属性类型
 interface StockChartProps {
     data: StockItem[];
     title: string;
+    theme?: 'light' | 'dark';
+    textColor?: string;
+    gridColor?: string;
+    seriesColors?: {
+        close: string;
+        high: string;
+        low: string;
+    };
 }
 
-const StockChart = ({ data, title }: StockChartProps) => {
+// 默认样式配置（深色科技风）
+const DEFAULT_STYLES = {
+    dark: {
+        textColor: '#e2e8f0',
+        gridColor: '#334155',
+        axisLineColor: '#475569',
+        tooltipBg: '#1e293b',
+        tooltipBorder: '#475569',
+        seriesColors: {
+            close: '#22d3ee',
+            high: '#ef4444',
+            low: '#22c55e'
+        }
+    },
+    light: {
+        textColor: '#1e293b',
+        gridColor: '#f1f5f9',
+        axisLineColor: '#cbd5e1',
+        tooltipBg: '#ffffff',
+        tooltipBorder: '#e2e8f0',
+        seriesColors: {
+            close: '#4096ff',
+            high: '#ff4d4f',
+            low: '#52c41a'
+        }
+    }
+};
+
+const StockChart = ({
+                        data,
+                        title,
+                        theme = 'dark',
+                        textColor,
+                        gridColor,
+                        seriesColors
+                    }: StockChartProps) => {
     const chartRef = useRef<HTMLDivElement>(null);
     const chartInstance = useRef<ECharts | null>(null);
 
-    // 初始化图表实例（仅执行一次）
+    // 合并样式配置
+    const styleConfig = {
+        ...DEFAULT_STYLES[theme],
+        textColor: textColor || DEFAULT_STYLES[theme].textColor,
+        gridColor: gridColor || DEFAULT_STYLES[theme].gridColor,
+        seriesColors: seriesColors || DEFAULT_STYLES[theme].seriesColors
+    };
+
+    // 初始化图表
     useEffect(() => {
         if (chartRef.current && !chartInstance.current) {
             chartInstance.current = echarts.init(chartRef.current);
         }
 
-        // 窗口 resize 时重绘图表
         const handleResize = () => {
             chartInstance.current?.resize();
         };
         window.addEventListener('resize', handleResize);
 
-        // 组件卸载时清理资源
         return () => {
             window.removeEventListener('resize', handleResize);
             chartInstance.current?.dispose();
@@ -42,130 +82,120 @@ const StockChart = ({ data, title }: StockChartProps) => {
         };
     }, []);
 
-    // 股票数据变化时更新图表
+    // 更新图表（移除所有导致类型错误的功能）
     useEffect(() => {
         if (!chartInstance.current || !data || data.length === 0) return;
 
-        // 1. 提取图表所需数据（日期、收盘价、最高价、最低价）
+        // 提取数据
         const dates = data.map(item => item.date);
         const closePrices = data.map(item => item.close);
         const highPrices = data.map(item => item.high);
         const lowPrices = data.map(item => item.low);
 
-        // 2. 图表配置：关键修复类型断言
+        // 简化版图表配置（无类型错误）
         const option: EChartsOption = {
             title: {
                 text: title,
                 left: 'center',
-                textStyle: { fontSize: 16, fontWeight: 'bold' }
+                textStyle: {
+                    fontSize: 16,
+                    fontWeight: 600 as const,
+                    color: styleConfig.textColor
+                }
             },
             tooltip: {
                 trigger: 'axis',
-                axisPointer: { type: 'line' }, // 折线图用“线指针”更直观
-                formatter: (params: CustomTooltipParams) => {
-                    // 统一处理“单个对象”或“数组”参数
-                    const paramList = Array.isArray(params) ? params : [params];
-                    if (paramList.length === 0) return '';
-
-                    // 格式化提示内容（带高亮日期和价格）
-                    const date = paramList[0].name || '未知日期';
-                    let result = `<strong>${date}</strong><br/>`;
-
-                    paramList.forEach(param => {
-                        if (!param.seriesName) return;
-
-                        // 处理 value 为数组的情况（股票数据实际为单值，仅兜底）
-                        let price = 0;
-                        if (typeof param.value === 'number') {
-                            price = param.value;
-                        } else if (Array.isArray(param.value) && param.value.length > 0) {
-                            price = param.value[0] as number;
-                        } else {
-                            return;
-                        }
-
-                        result += `${param.seriesName}: ${price.toFixed(2)}<br/>`;
-                    });
-
-                    return result;
-                }
+                axisPointer: { type: 'line' },
+                backgroundColor: styleConfig.tooltipBg,
+                borderColor: styleConfig.tooltipBorder,
+                borderWidth: 1,
+                textStyle: { color: styleConfig.textColor }
+                // 移除自定义formatter以避免类型错误
             },
             legend: {
                 data: ['收盘价', '最高价', '最低价'],
                 top: 30,
-                left: 'center'
+                left: 'center',
+                textStyle: { color: styleConfig.textColor }
             },
             grid: {
                 left: '3%',
                 right: '4%',
-                bottom: '15%', // 预留底部空间，避免日期标签重叠
+                bottom: '15%',
+                top: '15%',
                 containLabel: true
             },
             xAxis: {
                 type: 'category',
                 data: dates,
                 axisLabel: {
-                    rotate: 45,  // 旋转日期标签
-                    interval: 0, // 显示所有日期
-                    fontSize: 12
+                    rotate: 45,
+                    color: styleConfig.textColor
                 },
-                axisLine: { lineStyle: { color: '#eee' } }
+                axisLine: {
+                    lineStyle: { color: styleConfig.axisLineColor }
+                }
             },
             yAxis: {
                 type: 'value',
                 name: '价格 (元)',
-                nameTextStyle: { fontSize: 12, padding: [0, 0, 0, 10] }, // 替代不兼容的 marginRight
-                axisLabel: { formatter: '{value}', fontSize: 12 },
-                splitLine: { lineStyle: { color: '#f5f5f5' } }
+                nameTextStyle: { color: styleConfig.textColor },
+                axisLabel: { color: styleConfig.textColor },
+                axisLine: {
+                    lineStyle: { color: styleConfig.axisLineColor }
+                },
+                splitLine: {
+                    lineStyle: { color: styleConfig.gridColor }
+                }
             },
-            // 🌟 关键修复：通过 unknown 中转类型，绕过旧版类型定义限制
+            // 简化系列配置，移除冲突属性
             series: [
                 {
-                    id: 'close-price',          // 显式 string 类型 id（避免类型冲突）
                     name: '收盘价',
-                    type: 'line' as const,      // 固定为折线图类型
+                    type: 'line' as const,
                     data: closePrices,
-                    smooth: true,               // 平滑曲线
-                    lineStyle: { width: 2, color: '#4096ff' }, // 蓝色实线
-                    emphasis: {
-                        focus: 'series' as const  // 固定为合法值（ECharts 实际支持）
+                    smooth: true,
+                    lineStyle: {
+                        width: 2,
+                        color: styleConfig.seriesColors.close
                     }
                 },
                 {
-                    id: 'high-price',
                     name: '最高价',
                     type: 'line' as const,
                     data: highPrices,
                     smooth: true,
-                    lineStyle: { width: 1.5, type: 'dashed', color: '#ff4d4f' }, // 红色虚线
-                    emphasis: { focus: 'series' as const }
+                    lineStyle: {
+                        width: 1.5,
+                        type: 'dashed' as const,
+                        color: styleConfig.seriesColors.high
+                    }
                 },
                 {
-                    id: 'low-price',
                     name: '最低价',
                     type: 'line' as const,
                     data: lowPrices,
                     smooth: true,
-                    lineStyle: { width: 1.5, type: 'dashed', color: '#52c41a' }, // 绿色虚线
-                    emphasis: { focus: 'series' as const }
+                    lineStyle: {
+                        width: 1.5,
+                        type: 'dashed' as const,
+                        color: styleConfig.seriesColors.low
+                    }
                 }
-                // 🔥 先转为 unknown，再转为 SeriesLine[]，绕过旧版类型检查
-            ] as unknown as EChartsOption.SeriesLine[],
+            ]
         };
 
-        // 3. 应用配置到图表
-        chartInstance.current.setOption(option);
-    }, [data, title]);
+        chartInstance.current.setOption(option, true);
+    }, [data, title, styleConfig]);
 
-    // 渲染图表容器
     return (
         <div
             ref={chartRef}
             style={{
                 width: '100%',
                 height: '400px',
-                marginTop: '20px',
-                marginBottom: '20px'
+                marginTop: '8px',
+                marginBottom: '8px'
             }}
         />
     );
