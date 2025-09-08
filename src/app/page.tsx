@@ -267,7 +267,7 @@ export default function Home() {
             className="p-5 bg-slate-800/60 backdrop-blur-sm border border-slate-700 rounded-lg shadow-lg relative overflow-hidden group"
         >
           <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-orange-500 to-red-500 scale-x-0 group-hover:scale-x-100 transition-transform origin-left duration-500"></div>
-          <h2 className="text-xl font-semibold mb-5 text-orange-300">Stock Data & Chart · 股票数据与图表</h2>
+          <h2 className="text-xl font-semibold mb-5 text-orange-300">Data & Chart · 股票数据与图表样例</h2>
 
           {/* 未加载/加载中：按钮作为掩饰，始终可点击，文字随状态变化 */}
           {!stockData && !stockError && (

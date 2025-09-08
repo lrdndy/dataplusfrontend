@@ -82,7 +82,7 @@ const StockChart = ({
         };
     }, []);
 
-    // 更新图表（移除所有导致类型错误的功能）
+    // 更新图表
     useEffect(() => {
         if (!chartInstance.current || !data || data.length === 0) return;
 
@@ -92,7 +92,7 @@ const StockChart = ({
         const highPrices = data.map(item => item.high);
         const lowPrices = data.map(item => item.low);
 
-        // 简化版图表配置（无类型错误）
+        // 简化版图表配置
         const option: EChartsOption = {
             title: {
                 text: title,
@@ -146,7 +146,9 @@ const StockChart = ({
                 },
                 splitLine: {
                     lineStyle: { color: styleConfig.gridColor }
-                }
+                },
+                min: 'dataMin',
+                max: 'dataMax'
             },
             // 简化系列配置，移除冲突属性
             series: [
