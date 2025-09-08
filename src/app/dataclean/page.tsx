@@ -185,9 +185,9 @@ export default function DataPreprocessingPage() {
     const [dataSources, setDataSources] = useState(mockDataSources);
     const [cleaningRules, setCleaningRules] = useState(mockCleaningRules);
     const [processingSteps, setProcessingSteps] = useState(mockProcessingSteps);
-    const [isProcessing, setIsProcessing] = useState(true);
+    const [isProcessing, setIsProcessing] = useState(false);
 
-    // 模拟处理进度更新
+    //模拟处理进度更新
     useEffect(() => {
         if (!isProcessing) return;
 
@@ -288,7 +288,7 @@ export default function DataPreprocessingPage() {
                         </Button>
                         <div className="flex items-center gap-2">
                             <BarChart3 className="h-6 w-6 text-blue-600 dark:text-blue-400" />
-                            <h1 className="text-xl font-bold">TradeClean Pro</h1>
+                            <h1 className="text-xl font-bold">DataClean Pro</h1>
                         </div>
                     </div>
 
@@ -404,7 +404,7 @@ export default function DataPreprocessingPage() {
                         <div className="space-y-6">
                             <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
                                 <div>
-                                    <h1 className="text-2xl font-bold">交易数据预处理概览</h1>
+                                    <h1 className="text-2xl font-bold">数据预处理概览</h1>
                                     <p className="text-gray-500 dark:text-gray-400">
                                         自动化处理交易数据全流程，提升金融数据质量
                                     </p>
@@ -422,11 +422,11 @@ export default function DataPreprocessingPage() {
                                             </Button>
                                         </DropdownMenuTrigger>
                                         <DropdownMenuContent>
-                                            <DropdownMenuItem>
+                                            <DropdownMenuItem className="bg-gray-50 hover:bg-gray-100 active:bg-gray-200 transition-colors duration-150">
                                                 <Save className="mr-2 h-4 w-4" />
                                                 保存交易配置
                                             </DropdownMenuItem>
-                                            <DropdownMenuItem>
+                                            <DropdownMenuItem className="bg-gray-50 hover:bg-gray-100 active:bg-gray-200 transition-colors duration-150">
                                                 <Download className="mr-2 h-4 w-4" />
                                                 导出交易报告
                                             </DropdownMenuItem>
@@ -440,7 +440,7 @@ export default function DataPreprocessingPage() {
                                 <Card className="p-5 hover:shadow-md transition-shadow">
                                     <div className="flex items-center justify-between mb-3">
                                         <h3 className="text-sm font-medium text-gray-500 dark:text-gray-400">交易数据源数量</h3>
-                                        <Database className="h-5 w-5 text-blue-500" />
+                                        <Database className="h-5 w-5 text-blue-500" onClick={() => setActiveStep('sources')} />
                                     </div>
                                     <p className="text-2xl font-bold">4</p>
                                     <p className="text-xs text-green-500 mt-1">
@@ -453,7 +453,7 @@ export default function DataPreprocessingPage() {
                                 <Card className="p-5 hover:shadow-md transition-shadow">
                                     <div className="flex items-center justify-between mb-3">
                                         <h3 className="text-sm font-medium text-gray-500 dark:text-gray-400">检测到的交易问题</h3>
-                                        <AlertTriangle className="h-5 w-5 text-orange-500" />
+                                        <AlertTriangle className="h-5 w-5 text-orange-500" onClick={() => setActiveStep('issues')}/>
                                     </div>
                                     <p className="text-2xl font-bold">5</p>
                                     <p className="text-xs text-orange-500 mt-1">
@@ -464,7 +464,7 @@ export default function DataPreprocessingPage() {
                                 <Card className="p-5 hover:shadow-md transition-shadow">
                                     <div className="flex items-center justify-between mb-3">
                                         <h3 className="text-sm font-medium text-gray-500 dark:text-gray-400">活跃清洗规则</h3>
-                                        <Settings className="h-5 w-5 text-green-500" />
+                                        <Settings className="h-5 w-5 text-green-500" onClick={() => setActiveStep('rules')}/>
                                     </div>
                                     <p className="text-2xl font-bold">4</p>
                                     <p className="text-xs text-gray-500 mt-1">
