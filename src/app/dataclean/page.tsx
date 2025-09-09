@@ -180,7 +180,7 @@ const mockProcessingSteps: ProcessingStep[] = [
 export default function DataPreprocessingPage() {
     const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
     const [activeStep, setActiveStep] = useState('overview');
-    const [processingProgress, setProcessingProgress] = useState(35);
+    const [processingProgress, setProcessingProgress] = useState(0);
     const [dataIssues, setDataIssues] = useState(mockDataIssues);
     const [dataSources, setDataSources] = useState(mockDataSources);
     const [cleaningRules, setCleaningRules] = useState(mockCleaningRules);
