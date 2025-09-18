@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import {
     BarChart3,
     LineChart,
@@ -28,7 +28,9 @@ import {
     Calendar,
     ArrowUpRight,
     ArrowDownRight,
-    Link
+    Link,
+    Wifi,
+    WifiOff
 } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
@@ -48,32 +50,61 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Label } from '@/components/ui/label';
+import StockIndex from "@/components/StockIndex";
 
-// 固定种子的随机数生成器，避免服务端客户端渲染不匹配
+// 固定种子的随机数生成器（保留）
 const createRandomGenerator = (seed: number) => {
     return () => {
         seed = (seed * 9301 + 49297) % 233280;
         return seed / 233280;
     };
 };
-
-// 使用固定种子确保服务端和客户端生成相同的"随机"数据
 const seed = 12345;
 const random = createRandomGenerator(seed);
 
-// 定义交易数据相关类型
-interface TickerData {
-    ticker: string;
-    name: string;
-    sector: string;
-    price: number;
-    change: number;
+// -------------------------- 数据类型定义（不变） --------------------------
+interface WebSocketFuturesData {
+    instrument_id: string;
+    product_name?: string;
+    exchange?: string;
+    expiry_date?: string;
+    last_price: number;
+    price_change_rate: number;
+    price_increase: number;
     volume: number;
-    marketCap: number;
-    volatility: number;
+    open_interest: number;
+    contract_multiplier?: number;
+    pre_settlement_price: number;
+    bid_price: number;
+    ask_price: number;
+    bid_volume: number;
+    ask_volume: number;
+    upper_limit_price: number;
+    lower_limit_price: number;
+    timestamp: string;
 }
 
-interface AnalysisMetric {
+interface FuturesContractData {
+    instrumentId: string;
+    // productName: string;
+    // exchange: string;
+    // expiryDate: string;
+    lastPrice: number;
+    changeRate: number;
+    volume: number;
+    openInterest: number;
+    // contractMultiplier: number;
+    // preSettlementPrice: number;
+    bidPrice: number;
+    askPrice: number;
+    bidVolume: number;
+    askVolume: number;
+    upperLimitPrice: number;
+    lowerLimitPrice: number;
+    timestamp: string;
+}
+
+interface FuturesAnalysisMetric {
     id: string;
     name: string;
     value: number;
@@ -86,99 +117,58 @@ interface TimeSeriesData {
     timestamp: string;
     [key: string]: number | string;
 }
-
-interface CorrelationData {
-    ticker1: string;
-    ticker2: string;
+interface FuturesCorrelationData {
+    contract1: string;
+    contract2: string;
     correlation: number;
 }
-
-interface ClusterData {
+interface FuturesClusterData {
     cluster: number;
-    tickers: string[];
+    contracts: string[];
     characteristics: Record<string, number>;
 }
 
-// 模拟交易数据
-const mockTickerData: TickerData[] = [
-    {
-        ticker: 'AAPL',
-        name: 'Apple Inc.',
-        sector: 'Technology',
-        price: 178.23,
-        change: 1.24,
-        volume: 52487321,
-        marketCap: 2856000000000,
-        volatility: 1.87
-    },
-    {
-        ticker: 'MSFT',
-        name: 'Microsoft Corp',
-        sector: 'Technology',
-        price: 336.72,
-        change: 0.87,
-        volume: 24561892,
-        marketCap: 2345000000000,
-        volatility: 1.53
-    },
-    {
-        ticker: 'GOOGL',
-        name: 'Alphabet Inc.',
-        sector: 'Technology',
-        price: 136.45,
-        change: -0.42,
-        volume: 18234567,
-        marketCap: 1820000000000,
-        volatility: 1.65
-    },
-    {
-        ticker: 'AMZN',
-        name: 'Amazon.com Inc.',
-        sector: 'Consumer Cyclical',
-        price: 138.52,
-        change: 2.15,
-        volume: 42156789,
-        marketCap: 1432000000000,
-        volatility: 2.34
-    },
-    {
-        ticker: 'TSLA',
-        name: 'Tesla Inc.',
-        sector: 'Automotive',
-        price: 248.37,
-        change: -3.21,
-        volume: 125478963,
-        marketCap: 789000000000,
-        volatility: 5.67
-    },
-    {
-        ticker: 'META',
-        name: 'Meta Platforms',
-        sector: 'Technology',
-        price: 312.89,
-        change: 1.78,
-        volume: 28765431,
-        marketCap: 756000000000,
-        volatility: 3.21
-    }
+// -------------------------- 更新：现货数据类型（匹配实际返回格式） --------------------------
+interface SpotDataItem {
+    date: string;
+    symbol: string;
+    spot_price: number;
+    near_contract: string;
+    near_contract_price: number;
+    dominant_contract: string;
+    dominant_contract_price: number;
+    near_month: number;
+    dominant_month: number;
+    near_basis: number;
+    dom_basis: number;
+    near_basis_rate: number;
+    dom_basis_rate: number;
+}
+
+interface SpotDataResponse {
+    symbol: string;
+    start_date: string;
+    end_date: string;
+    data: SpotDataItem[];
+    message: string;
+    error?: string;
+}
+
+
+// 期货分析指标虚拟数据（不变）
+const mockFuturesMetrics: FuturesAnalysisMetric[] = [
+    { id: 'm1', name: '持仓量变化率', value: 5.67, change: 1.23, unit: '%', importance: 'high' },
+    { id: 'm2', name: '成交量持仓比', value: 0.38, change: -0.05, unit: '', importance: 'high' },
+    { id: 'm3', name: '基差（现货-期货）', value: -28.6, change: -5.2, unit: '点', importance: 'medium' },
+    { id: 'm4', name: '年化波动率', value: 18.7, change: 2.1, unit: '%', importance: 'high' },
+    { id: 'm5', name: '主力合约切换信号', value: 0.23, change: 0.11, unit: '', importance: 'medium' },
+    { id: 'm6', name: '持仓集中度', value: 35.8, change: -3.2, unit: '%', importance: 'low' }
 ];
 
-// 模拟分析指标数据
-const mockAnalysisMetrics: AnalysisMetric[] = [
-    { id: 'm1', name: '平均日收益率', value: 0.87, change: 0.12, unit: '%', importance: 'high' },
-    { id: 'm2', name: '波动率指数', value: 2.34, change: -0.23, unit: '', importance: 'high' },
-    { id: 'm3', name: '交易量均值', value: 45623789, change: 5.67, unit: '股', importance: 'medium' },
-    { id: 'm4', name: '市盈率', value: 28.76, change: 1.32, unit: '', importance: 'medium' },
-    { id: 'm5', name: 'Beta系数', value: 1.23, change: 0.05, unit: '', importance: 'high' },
-    { id: 'm6', name: '流动性指数', value: 87.65, change: -2.13, unit: '', importance: 'low' }
-];
-
-// 生成时间序列数据 - 使用固定种子随机数
-const generateTimeSeriesData = (tickers: string[], days: number = 30): TimeSeriesData[] => {
+// -------------------------- 辅助数据生成函数（不变） --------------------------
+const generateFuturesTimeSeriesData = (contracts: string[], days: number = 30): TimeSeriesData[] => {
     const data: TimeSeriesData[] = [];
     const startDate = new Date();
-
-    // 为时间序列生成创建独立的随机数生成器
     const tsRandom = createRandomGenerator(seed + 1);
 
     for (let i = days; i >= 0; i--) {
@@ -187,95 +177,229 @@ const generateTimeSeriesData = (tickers: string[], days: number = 30): TimeSerie
         const timestamp = date.toISOString().split('T')[0];
 
         const entry: TimeSeriesData = { timestamp };
-
-        tickers.forEach(ticker => {
-            // 生成随机但有趋势的价格数据
-            const basePrice = 100 + tsRandom() * 200;
-            const trendFactor = (days - i) * 0.02;
-            const randomFactor = (tsRandom() - 0.5) * 5;
-            entry[ticker] = parseFloat((basePrice + trendFactor * basePrice + randomFactor).toFixed(2));
+        contracts.forEach(contract => {
+            const isFinancial = contract.startsWith('IF') || contract.startsWith('IH') || contract.startsWith('IC');
+            const basePrice = isFinancial ? 2000 + tsRandom() * 4000 : 1000 + tsRandom() * 100000;
+            const trendFactor = (days - i) * 0.015;
+            const randomFactor = (tsRandom() - 0.5) * (isFinancial ? 100 : 5000);
+            entry[contract] = parseFloat((basePrice + trendFactor * basePrice + randomFactor).toFixed(isFinancial ? 1 : 0));
         });
 
         data.push(entry);
     }
-
     return data;
 };
 
-// 生成相关性数据 - 使用固定种子随机数
-const generateCorrelationData = (tickers: string[]): CorrelationData[] => {
-    const data: CorrelationData[] = [];
+const generateFuturesCorrelationData = (contracts: string[]): FuturesCorrelationData[] => {
+    const data: FuturesCorrelationData[] = [];
     const corrRandom = createRandomGenerator(seed + 2);
 
-    for (let i = 0; i < tickers.length; i++) {
-        for (let j = i + 1; j < tickers.length; j++) {
-            // 生成-1到1之间的相关系数，使用固定种子
-            const correlation = parseFloat((corrRandom() * 2 - 1).toFixed(2));
-            data.push({
-                ticker1: tickers[i],
-                ticker2: tickers[j],
-                correlation
-            });
+    for (let i = 0; i < contracts.length; i++) {
+        for (let j = i + 1; j < contracts.length; j++) {
+            const contract1 = contracts[i];
+            const contract2 = contracts[j];
+            let correlation = parseFloat((corrRandom() * 2 - 1).toFixed(2));
+            const isSameType1 = contract1.startsWith('IF') || contract1.startsWith('IH') || contract1.startsWith('IC');
+            const isSameType2 = contract2.startsWith('IF') || contract2.startsWith('IH') || contract2.startsWith('IC');
+            if (isSameType1 && isSameType2) {
+                correlation = parseFloat((Math.abs(correlation) * 0.6 + 0.3).toFixed(2));
+            }
+
+            data.push({ contract1, contract2, correlation });
         }
     }
-
     return data;
 };
 
-// 生成聚类数据 - 使用固定种子随机数
-const generateClusterData = (tickers: string[]): ClusterData[] => {
-    const clusters: ClusterData[] = [];
-    const clusterCount = 3;
+const generateFuturesClusterData = (contracts: string[]): FuturesClusterData[] => {
+    const clusters: FuturesClusterData[] = [];
     const clusterRandom = createRandomGenerator(seed + 3);
 
-    // 随机分配股票到聚类 - 使用固定种子确保一致性
-    const shuffledTickers = [...tickers].sort(() => 0.5 - clusterRandom());
-    const tickersPerCluster = Math.ceil(tickers.length / clusterCount);
+    const financialContracts = contracts.filter(c => c.startsWith('IF') || c.startsWith('IH') || c.startsWith('IC'));
+    const energyContracts = contracts.filter(c => c.startsWith('SC'));
+    const metalContracts = contracts.filter(c => c.startsWith('CU'));
+    const chemicalContracts = contracts.filter(c => c.startsWith('MA'));
 
-    for (let i = 0; i < clusterCount; i++) {
-        const start = i * tickersPerCluster;
-        const end = start + tickersPerCluster;
-        const clusterTickers = shuffledTickers.slice(start, end);
+    const clusterList = [
+        { name: '金融期货', contracts: financialContracts },
+        { name: '能源及化工期货', contracts: [...energyContracts, ...chemicalContracts] },
+        { name: '金属期货', contracts: metalContracts }
+    ].filter(cluster => cluster.contracts.length > 0);
 
+    clusterList.forEach((cluster, index) => {
         clusters.push({
-            cluster: i + 1,
-            tickers: clusterTickers,
+            cluster: index + 1,
+            contracts: cluster.contracts,
             characteristics: {
-                '平均波动率': parseFloat((clusterRandom() * 3 + 0.5).toFixed(2)),
-                '平均收益率': parseFloat((clusterRandom() * 2 - 0.5).toFixed(2)),
-                '市值规模': parseFloat((clusterRandom() * 100 + 50).toFixed(0))
+                '平均持仓量（万手）': parseFloat((clusterRandom() * 20 + 10).toFixed(1)),
+                '平均波动率（%）': parseFloat((clusterRandom() * 10 + 8).toFixed(1)),
+                '平均成交量（万手）': parseFloat((clusterRandom() * 30 + 15).toFixed(1))
             }
         });
-    }
+    });
 
     return clusters;
 };
 
-const timeSeriesData = generateTimeSeriesData(mockTickerData.map(t => t.ticker));
-const correlationData = generateCorrelationData(mockTickerData.map(t => t.ticker));
-const clusterData = generateClusterData(mockTickerData.map(t => t.ticker));
-
-// 主分析页面组件
-export default function TradingAnalysisPage() {
+export default function FuturesAnalysisPage() {
     const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
     const [activeTab, setActiveTab] = useState('overview');
-    const [selectedTicker, setSelectedTicker] = useState('all');
+    const [selectedContract, setSelectedContract] = useState('all');
     const [dateRange, setDateRange] = useState('30d');
     const [analysisLoading, setAnalysisLoading] = useState(false);
     const [progress, setProgress] = useState(0);
-    // 添加客户端渲染标记，避免Hydration不匹配
     const [isClient, setIsClient] = useState(false);
 
-    // 确保在客户端渲染时才执行
+    const [reconnectTimer, setReconnectTimer] = useState(null);
+    const [futuresData, setFuturesData] = useState<FuturesContractData[]>([]);
+    const [connectionStatus, setConnectionStatus] = useState<'connecting' | 'connected' | 'disconnected'>('connecting');
+    const [lastUpdateTime, setLastUpdateTime] = useState('');
+    const socketRef = useRef<WebSocket | null>(null); // 替换 useState 存储 socket
+
+    // -------------------------- 现货数据状态 --------------------------
+    const [spotPrice, setSpotPrice] = useState<number | null>(null); // 现货价格
+    const [spotLoading, setSpotLoading] = useState(false); // 现货加载状态
+    const [prevBasis, setPrevBasis] = useState<number>(-28.5); // 上一次基差（用于计算change）
+    const [spotError, setSpotError] = useState<string | null>(null); // 现货数据错误信息
+
+    // 初始化客户端标识（不变）
     useEffect(() => {
         setIsClient(true);
     }, []);
 
-    // 模拟分析加载
-    useEffect(() => {
-        if (!isClient) return; // 仅在客户端执行
+    // -------------------------- 修复2：WebSocket 连接逻辑（移除 socket 依赖，用 ref 操作实例） --------------------------
+    const initWebSocket = useCallback(() => {
+        // 关闭现有连接（从 ref 获取实例）
+        if (socketRef.current) {
+            socketRef.current.close(1000, '重新连接');
+        }
 
-        // 模拟分析进度
+        setConnectionStatus('connecting');
+        const newSocket = new WebSocket("ws://127.0.0.1:8001/depth_md");
+
+        // 连接成功
+        newSocket.onopen = () => {
+            console.log("【前端】WebSocket 连接成功！");
+            setConnectionStatus('connected');
+            socketRef.current = newSocket; // 存到 ref 中
+            if (reconnectTimer) clearTimeout(reconnectTimer);
+        };
+
+        // 接收消息（核心：更新期货数据）
+        newSocket.onmessage = (event) => {
+            // console.log("【前端】收到原始数据：", event.data);
+            try {
+                const wsData: WebSocketFuturesData = JSON.parse(event.data);
+                //const staticInfo = contractStaticInfo[wsData.instrument_id] || {};
+                if (wsData && wsData.instrument_id) {
+                    const formattedData: FuturesContractData = {
+                        instrumentId: wsData.instrument_id,
+                        // productName: staticInfo.productName || wsData.product_name || '未知品种',
+                        // exchange: staticInfo.exchange || wsData.exchange || '未知交易所',
+                        // expiryDate: staticInfo.expiryDate || wsData.expiry_date || '未知到期日',
+                        lastPrice: wsData.last_price,
+                        changeRate: wsData.price_change_rate,
+                        volume: wsData.volume,
+                        openInterest: wsData.open_interest,
+                        // contractMultiplier: staticInfo.contractMultiplier || wsData.contract_multiplier || 1,
+                        // preSettlementPrice: staticInfo.preSettlementPrice || wsData.pre_settlement_price,
+                        bidPrice: wsData.bid_price,
+                        askPrice: wsData.ask_price,
+                        bidVolume: wsData.bid_volume,
+                        askVolume: wsData.ask_volume,
+                        upperLimitPrice: wsData.upper_limit_price,
+                        lowerLimitPrice: wsData.lower_limit_price,
+                        timestamp: wsData.timestamp
+                    };
+
+                    // 更新数据列表（函数式更新，确保拿到最新状态）
+                    setFuturesData(prev => {
+                        const existsIndex = prev.findIndex(item => item.instrumentId === wsData.instrument_id);
+                        if (existsIndex > -1) {
+                            const newList = [...prev];
+                            newList[existsIndex] = formattedData;
+                            return newList;
+                        } else {
+                            return [...prev, formattedData];
+                        }
+                    });
+                    setLastUpdateTime(new Date().toLocaleTimeString());
+                }
+
+
+            } catch (e) {
+                console.error("【前端】JSON解析失败！错误：", e);
+            }
+        };
+
+        // 连接关闭（自动重连）
+        newSocket.onclose = (event) => {
+            console.log("【前端】WebSocket 连接关闭，原因：", event);
+            setConnectionStatus('disconnected');
+            socketRef.current = null; // 清空 ref
+            //setTimeout(initWebSocket, 3000);
+            console.log('WebSocket已断开，需手动重连');
+        };
+
+        // 错误处理
+        newSocket.onerror = (error) => {
+            console.error("【前端】WebSocket 错误：", error);
+            setConnectionStatus('disconnected');
+            socketRef.current = null;
+        };
+
+        // 初始赋值（避免连接成功前的空值）
+        socketRef.current = newSocket;
+        return newSocket;
+    }, []); // 移除 socket 依赖，解决循环问题
+
+    // 初始化 WebSocket 连接（不变）
+    useEffect(() => {
+        if (!isClient) return;
+        const ws = initWebSocket();
+        return () => ws.close();
+    }, [isClient, initWebSocket]);
+
+    // -------------------------- 动态计算基差并更新m3 --------------------------
+    // -------------------------- 核心修改3：基差计算匹配选中的合约 --------------------------
+    const dynamicMetrics = useMemo(() => {
+        const metrics: FuturesAnalysisMetric[] = [
+            { id: 'm1', name: '持仓量变化率', value: 5.67, change: 1.23, unit: '%', importance: 'high' },
+            { id: 'm2', name: '成交量持仓比', value: 0.38, change: -0.05, unit: '', importance: 'high' },
+            { id: 'm3', name: '基差（现货-期货）', value: -28.5, change: -5.2, unit: '点', importance: 'medium' },
+            { id: 'm4', name: '年化波动率', value: 18.7, change: 2.1, unit: '%', importance: 'high' },
+            { id: 'm5', name: '主力合约切换信号', value: 0.23, change: 0.11, unit: '', importance: 'medium' },
+            { id: 'm6', name: '持仓集中度', value: 35.8, change: -3.2, unit: '%', importance: 'low' }
+        ];
+
+        // 计算基差：匹配下拉框选中的合约价格
+        if (spotPrice !== null && futuresData.length > 0) {
+            // 找到选中的合约数据
+            const targetContract = selectedContract !== 'all'
+                ? futuresData.find(item => item.instrumentId === selectedContract)
+                : futuresData[0]; // 所有合约时取第一个
+
+            // 兜底：避免合约数据不存在的情况
+            const futuresPrice = targetContract?.lastPrice ?? 0;
+            const currentBasis = parseFloat((spotPrice - futuresPrice).toFixed(2));
+            const basisChange = parseFloat((currentBasis - prevBasis).toFixed(2));
+
+            // 更新m3指标
+            metrics[2] = {
+                ...metrics[2],
+                value: currentBasis,
+                change: basisChange
+            };
+            setPrevBasis(currentBasis);
+        }
+
+        return metrics;
+    }, [spotPrice, futuresData, prevBasis, selectedContract]); // 新增 selectedContract 依赖
+
+    // -------------------------- 修复3：精简分析加载的 useEffect 依赖（移除 futuresData） --------------------------
+    useEffect(() => {
+        if (!isClient || connectionStatus !== 'connected' || analysisLoading) return; // 加 analysisLoading 判断，避免重复触发
+
         const timer = setTimeout(() => {
             setAnalysisLoading(true);
             const progressInterval = setInterval(() => {
@@ -288,54 +412,52 @@ export default function TradingAnalysisPage() {
                     return prev + 5;
                 });
             }, 150);
-
             return () => clearInterval(progressInterval);
         }, 500);
 
         return () => clearTimeout(timer);
-    }, [selectedTicker, dateRange, isClient]);
+    }, [selectedContract, dateRange, isClient, connectionStatus]); // 移除 futuresData 依赖
 
-    // 导出报告
-    const exportReport = (format: 'pdf' | 'excel') => {
+    // -------------------------- 修复4：记忆化 exportReport 函数（避免重复创建） --------------------------
+    const exportReport = useCallback((format: 'pdf' | 'excel') => {
+        if (analysisLoading) return; // 防止重复导出
         setAnalysisLoading(true);
         setProgress(0);
 
-        // 模拟导出进度
         const interval = setInterval(() => {
             setProgress(prev => {
                 if (prev >= 100) {
                     clearInterval(interval);
                     setAnalysisLoading(false);
-                    alert(`报告已成功导出为${format.toUpperCase()}格式`);
+                    alert(`期货分析报告已成功导出为${format.toUpperCase()}格式`);
                     return 100;
                 }
                 return prev + 10;
             });
         }, 200);
-    };
+    }, [analysisLoading]); // 依赖 analysisLoading，避免并发导出
 
-    // 获取变化趋势的图标和样式
+    // 工具函数（不变）
     const getChangeIndicator = (value: number) => {
         if (value > 0) {
             return (
                 <span className="flex items-center text-green-500">
                     <ArrowUpRight className="h-4 w-4 mr-1" />
-                    {value.toFixed(2)}%
+                    {value.toFixed(2)}%（涨）
                 </span>
             );
         } else if (value < 0) {
             return (
                 <span className="flex items-center text-red-500">
                     <ArrowDownRight className="h-4 w-4 mr-1" />
-                    {Math.abs(value).toFixed(2)}%
+                    {Math.abs(value).toFixed(2)}%（跌）
                 </span>
             );
         } else {
-            return <span>{value.toFixed(2)}%</span>;
+            return <span>{value.toFixed(2)}%（平）</span>;
         }
     };
 
-    // 获取重要性标签样式
     const getImportanceBadge = (importance: string) => {
         switch (importance) {
             case 'high':
@@ -349,14 +471,31 @@ export default function TradingAnalysisPage() {
         }
     };
 
-    // 确保在客户端渲染完成后再显示内容
+    // 连接状态显示组件（不变）
+    const getConnectionBadge = () => {
+        switch (connectionStatus) {
+            case 'connected':
+                return <Badge className="bg-green-500 flex items-center gap-1"><Wifi className="h-3 w-3" /> 已连接</Badge>;
+            case 'connecting':
+                return <Badge className="bg-amber-500 flex items-center gap-1"><RefreshCw className="h-3 w-3 animate-spin" /> 连接中</Badge>;
+            case 'disconnected':
+                return <Badge className="bg-red-500 flex items-center gap-1"><WifiOff className="h-3 w-3" /> 断开（重连中）</Badge>;
+        }
+    };
+
+    // -------------------------- 修复5：记忆化辅助数据（避免每次渲染生成新引用） --------------------------
+    const contractIds = useMemo(() => futuresData.map(item => item.instrumentId), [futuresData]);
+    const futuresTimeSeriesData = useMemo(() => generateFuturesTimeSeriesData(contractIds), [contractIds]);
+    const futuresCorrelationData = useMemo(() => generateFuturesCorrelationData(contractIds), [contractIds]);
+    const futuresClusterData = useMemo(() => generateFuturesClusterData(contractIds), [contractIds]);
+
     if (!isClient) {
         return <div className="min-h-screen"></div>;
     }
 
     return (
         <div className="flex flex-col min-h-screen bg-gray-50 dark:bg-gray-900 text-gray-900 dark:text-gray-100">
-            {/* 顶部导航栏 */}
+            {/* 顶部导航栏（不变） */}
             <header className="sticky top-0 z-30 w-full border-b bg-white/95 dark:bg-gray-900/95 backdrop-blur supports-[backdrop-filter]:bg-white/60">
                 <div className="container flex h-16 items-center justify-between">
                     <div className="flex items-center gap-2">
@@ -370,11 +509,18 @@ export default function TradingAnalysisPage() {
                         </Button>
                         <div className="flex items-center gap-2">
                             <Layers className="h-6 w-6 text-indigo-600 dark:text-indigo-400" />
-                            <h1 className="text-xl font-bold">DataThinker</h1>
+                            <h1 className="text-xl font-bold">FuturesDataThinker（期货数据分析）</h1>
                         </div>
                     </div>
 
                     <div className="flex items-center gap-4">
+                        <div className="flex items-center gap-2">
+                            {getConnectionBadge()}
+                            {connectionStatus === 'connected' && (
+                                <span className="text-sm text-gray-500">最后更新：{lastUpdateTime}</span>
+                            )}
+                        </div>
+
                         <TooltipProvider>
                             <Tooltip>
                                 <TooltipTrigger asChild>
@@ -384,7 +530,7 @@ export default function TradingAnalysisPage() {
                                     </Button>
                                 </TooltipTrigger>
                                 <TooltipContent>
-                                    <p>通知</p>
+                                    <p>期货行情通知</p>
                                 </TooltipContent>
                             </Tooltip>
                         </TooltipProvider>
@@ -404,7 +550,7 @@ export default function TradingAnalysisPage() {
                                 </DropdownMenuItem>
                                 <DropdownMenuItem>
                                     <Settings className="mr-2 h-4 w-4" />
-                                    <span>设置</span>
+                                    <span>期货分析设置</span>
                                 </DropdownMenuItem>
                             </DropdownMenuContent>
                         </DropdownMenu>
@@ -413,7 +559,7 @@ export default function TradingAnalysisPage() {
             </header>
 
             <div className="flex flex-1 overflow-hidden">
-                {/* 侧边栏 */}
+                {/* 侧边栏（不变） */}
                 <aside
                     className={`${
                         mobileMenuOpen ? 'translate-x-0' : '-translate-x-full'
@@ -426,7 +572,7 @@ export default function TradingAnalysisPage() {
                             onClick={() => setActiveTab('overview')}
                         >
                             <BarChart3 className="mr-2 h-4 w-4" />
-                            数据分析概览
+                            期货分析概览
                         </Button>
                         <Button
                             variant={activeTab === 'statistics' ? 'default' : 'ghost'}
@@ -434,7 +580,7 @@ export default function TradingAnalysisPage() {
                             onClick={() => setActiveTab('statistics')}
                         >
                             <BarChart className="mr-2 h-4 w-4" />
-                            基础统计分析
+                            期货基础统计
                         </Button>
                         <Button
                             variant={activeTab === 'trend' ? 'default' : 'ghost'}
@@ -442,7 +588,7 @@ export default function TradingAnalysisPage() {
                             onClick={() => setActiveTab('trend')}
                         >
                             <TrendingUp className="mr-2 h-4 w-4" />
-                            趋势预测分析
+                            期货趋势预测
                         </Button>
                         <Button
                             variant={activeTab === 'correlation' ? 'default' : 'ghost'}
@@ -450,7 +596,7 @@ export default function TradingAnalysisPage() {
                             onClick={() => setActiveTab('correlation')}
                         >
                             <Link className="mr-2 h-4 w-4" />
-                            相关性分析
+                            合约相关性分析
                         </Button>
                         <Button
                             variant={activeTab === 'cluster' ? 'default' : 'ghost'}
@@ -458,7 +604,7 @@ export default function TradingAnalysisPage() {
                             onClick={() => setActiveTab('cluster')}
                         >
                             <PieChart className="mr-2 h-4 w-4" />
-                            聚类分析
+                            期货品种聚类
                         </Button>
                         <Button
                             variant={activeTab === 'factors' ? 'default' : 'ghost'}
@@ -466,7 +612,7 @@ export default function TradingAnalysisPage() {
                             onClick={() => setActiveTab('factors')}
                         >
                             <Zap className="mr-2 h-4 w-4" />
-                            因子挖掘
+                            期货因子挖掘
                         </Button>
                         <Button
                             variant={activeTab === 'reports' ? 'default' : 'ghost'}
@@ -474,31 +620,41 @@ export default function TradingAnalysisPage() {
                             onClick={() => setActiveTab('reports')}
                         >
                             <FileText className="mr-2 h-4 w-4" />
-                            分析报告
+                            期货分析报告
+                        </Button>
+                        <Button
+                            variant={activeTab === 'stock_index' ? 'default' : 'ghost'}
+                            className="w-full justify-start"
+                            onClick={() => setActiveTab('stock_index')}
+                        >
+                            <FileText className="mr-2 h-4 w-4" />
+                            股指基差表
                         </Button>
                     </nav>
 
                     <div className="absolute bottom-4 left-0 right-0 px-4">
                         <Card className="bg-gradient-to-br from-indigo-50 to-purple-50 dark:from-indigo-900/20 dark:to-purple-900/20 p-4">
-                            <h3 className="font-medium mb-2">分析引擎状态</h3>
+                            <h3 className="font-medium mb-2">期货分析引擎状态</h3>
                             <p className="text-sm text-gray-600 dark:text-gray-400 mb-3">
-                                实时处理中，性能: 98.7%
+                                {connectionStatus === 'connected'
+                                    ? `实时连接中（${futuresData.length}个合约）`
+                                    : '等待连接...'}
                             </p>
-                            <Progress value={98.7} className="h-2" />
+                            <Progress value={connectionStatus === 'connected' ? 100 : 0} className="h-2" />
                         </Card>
                     </div>
                 </aside>
 
-                {/* 主内容区 */}
+                {/* 主内容区（不变，数据源已修复） */}
                 <main className={`flex-1 overflow-y-auto p-6 transition-all duration-300 ${
-                    mobileMenuOpen ? 'md:ml-0 ml-64' : 'md:ml-64 ml-0'
+                    mobileMenuOpen ? 'md:ml-0 ml-16' : 'md:ml-16 ml-0'
                 }`}>
                     {analysisLoading ? (
                         <div className="flex flex-col items-center justify-center h-full py-12">
                             <div className="text-center mb-8">
-                                <h2 className="text-xl font-semibold mb-4">正在进行数据分析</h2>
+                                <h2 className="text-xl font-semibold mb-4">正在进行期货数据分析</h2>
                                 <p className="text-gray-500 dark:text-gray-400 mb-4">
-                                    我们正在处理您的交易数据，生成深度分析结果
+                                    正在处理期货合约数据，生成深度分析结果（包含持仓量/成交量等维度）
                                 </p>
                                 <Progress value={progress} className="h-2 w-full max-w-md mx-auto" />
                                 <p className="text-sm text-gray-500 mt-2">{progress}% 完成</p>
@@ -510,8 +666,8 @@ export default function TradingAnalysisPage() {
                                             <TrendingUp className="h-5 w-5 text-blue-600 dark:text-blue-400" />
                                         </div>
                                         <div>
-                                            <h4 className="font-medium">趋势计算</h4>
-                                            <p className="text-sm text-gray-500">正在分析价格走势</p>
+                                            <h4 className="font-medium">期货趋势计算</h4>
+                                            <p className="text-sm text-gray-500">分析合约价格走势</p>
                                         </div>
                                     </div>
                                 </Card>
@@ -521,8 +677,8 @@ export default function TradingAnalysisPage() {
                                             <Link className="h-5 w-5 text-green-600 dark:text-green-400" />
                                         </div>
                                         <div>
-                                            <h4 className="font-medium">相关性分析</h4>
-                                            <p className="text-sm text-gray-500">计算资产间关联度</p>
+                                            <h4 className="font-medium">合约相关性分析</h4>
+                                            <p className="text-sm text-gray-500">计算期货间关联度</p>
                                         </div>
                                     </div>
                                 </Card>
@@ -532,8 +688,8 @@ export default function TradingAnalysisPage() {
                                             <PieChart className="h-5 w-5 text-purple-600 dark:text-purple-400" />
                                         </div>
                                         <div>
-                                            <h4 className="font-medium">聚类处理</h4>
-                                            <p className="text-sm text-gray-500">识别相似交易模式</p>
+                                            <h4 className="font-medium">品种聚类处理</h4>
+                                            <p className="text-sm text-gray-500">识别相似期货模式</p>
                                         </div>
                                     </div>
                                 </Card>
@@ -541,26 +697,27 @@ export default function TradingAnalysisPage() {
                         </div>
                     ) : (
                         <>
-                            {/* 数据分析概览 */}
+                            {/* 期货分析概览（不变） */}
                             {activeTab === 'overview' && (
                                 <div className="space-y-6">
                                     <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
                                         <div>
-                                            <h1 className="text-2xl font-bold">交易数据分析概览</h1>
+                                            <h1 className="text-2xl font-bold">期货交易数据分析概览</h1>
                                             <p className="text-gray-500 dark:text-gray-400">
-                                                多维度分析ticker级别交易数据，挖掘市场洞察
+                                                多维度分析期货合约级别数据（价格/持仓量/成交量），挖掘市场洞察
                                             </p>
                                         </div>
                                         <div className="flex flex-wrap gap-3">
-                                            <Select value={selectedTicker} onValueChange={setSelectedTicker}>
+                                            <Select value={selectedContract} onValueChange={setSelectedContract}>
                                                 <SelectTrigger className="w-[140px]">
-                                                    <SelectValue placeholder="选择股票" />
+                                                    <SelectValue placeholder="选择期货合约" />
                                                 </SelectTrigger>
                                                 <SelectContent>
-                                                    <SelectItem value="all">所有股票</SelectItem>
-                                                    {mockTickerData.map(ticker => (
-                                                        <SelectItem key={ticker.ticker} value={ticker.ticker}>
-                                                            {ticker.ticker} - {ticker.name}
+                                                    <SelectItem value="all">所有合约</SelectItem>
+                                                    {futuresData.map(contract => (
+                                                        <SelectItem key={contract.instrumentId} value={contract.instrumentId}>
+                                                            {contract.instrumentId}
+                                                            {/*{contract.instrumentId} - {contract.productName}*/}
                                                         </SelectItem>
                                                     ))}
                                                 </SelectContent>
@@ -577,6 +734,7 @@ export default function TradingAnalysisPage() {
                                                 </SelectContent>
                                             </Select>
                                             <Button onClick={() => {
+                                                if (analysisLoading) return;
                                                 setAnalysisLoading(true);
                                                 setProgress(0);
                                                 const interval = setInterval(() => {
@@ -591,8 +749,13 @@ export default function TradingAnalysisPage() {
                                                 }, 150);
                                             }}>
                                                 <RefreshCw className="mr-2 h-4 w-4" />
-                                                刷新数据
+                                                刷新分析
                                             </Button>
+                                            {/* 现货数据刷新按钮 */}
+                                            {/*<Button variant="secondary" onClick={} disabled={spotLoading}>*/}
+                                            {/*    <RefreshCw className={`mr-2 h-4 w-4 ${spotLoading ? 'animate-spin' : ''}`} />*/}
+                                            {/*    {spotLoading ? '刷新现货中' : '刷新现货'}*/}
+                                            {/*</Button>*/}
                                             <DropdownMenu>
                                                 <DropdownMenuTrigger asChild>
                                                     <Button variant="secondary">
@@ -602,19 +765,31 @@ export default function TradingAnalysisPage() {
                                                 </DropdownMenuTrigger>
                                                 <DropdownMenuContent>
                                                     <DropdownMenuItem onClick={() => exportReport('pdf')}>
-                                                        PDF格式
+                                                        PDF格式（期货分析）
                                                     </DropdownMenuItem>
                                                     <DropdownMenuItem onClick={() => exportReport('excel')}>
-                                                        Excel格式
+                                                        Excel格式（含原始合约数据）
                                                     </DropdownMenuItem>
                                                 </DropdownMenuContent>
                                             </DropdownMenu>
                                         </div>
                                     </div>
 
-                                    {/* 关键指标卡片 */}
+                                    {/* 显示现货数据错误信息 */}
+                                    {spotError && (
+                                        <Card className="bg-red-50 dark:bg-red-900/20 p-4 border-l-4 border-red-500">
+                                            <div className="flex items-start gap-3">
+                                                <AlertTriangle className="h-5 w-5 text-red-500 mt-0.5" />
+                                                <p className="text-sm text-red-600 dark:text-red-400">
+                                                    现货数据获取失败: {spotError}
+                                                </p>
+                                            </div>
+                                        </Card>
+                                    )}
+
+                                    {/* 期货关键指标卡片（不变） */}
                                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                                        {mockAnalysisMetrics.map(metric => (
+                                        {mockFuturesMetrics.map(metric => (
                                             <Card key={metric.id} className="p-5 hover:shadow-md transition-shadow">
                                                 <div className="flex items-center justify-between mb-3">
                                                     <h3 className="text-sm font-medium text-gray-500 dark:text-gray-400">{metric.name}</h3>
@@ -622,7 +797,10 @@ export default function TradingAnalysisPage() {
                                                 </div>
                                                 <div className="flex items-end justify-between">
                                                     <p className="text-2xl font-bold">
-                                                        {metric.value.toLocaleString()}
+                                                        {/* 基差加载时显示"加载中" */}
+                                                        {metric.id === 'm3' && spotLoading
+                                                            ? <span className="text-gray-400">加载中...</span>
+                                                            : metric.value.toLocaleString(undefined, { maximumFractionDigits: 2 })}
                                                         {metric.unit}
                                                     </p>
                                                     <div>
@@ -633,63 +811,92 @@ export default function TradingAnalysisPage() {
                                         ))}
                                     </div>
 
-                                    {/* 股票数据表格 */}
+                                    {/* 期货合约数据表格（不变） */}
                                     <Card>
                                         <div className="p-5 border-b">
-                                            <h2 className="text-lg font-semibold">股票交易数据</h2>
+                                            <h2 className="text-lg font-semibold">期货合约交易数据</h2>
+                                            {/* 连接状态与重连按钮 */}
+                                            <div className="flex items-center gap-2">
+                                                  <span className={`text-sm ${
+                                                      connectionStatus === 'connected' ? 'text-green-500' :
+                                                          connectionStatus === 'connecting' ? 'text-yellow-500' : 'text-red-500'
+                                                  }`}>
+                                                    {connectionStatus === 'connected' ? '已连接' :
+                                                        connectionStatus === 'connecting' ? '连接中...' : '已断开'}
+                                                  </span>
+                                                {/* 仅在断开状态显示重连按钮 */}
+                                                {connectionStatus === 'disconnected' && (
+                                                    <Button
+                                                        size="sm"
+                                                        onClick={initWebSocket}
+                                                    >
+                                                        手动重连
+                                                    </Button>
+                                                )}
+                                            </div>
                                         </div>
                                         <div className="p-5">
-                                            <Table>
-                                                <TableHeader>
-                                                    <TableRow>
-                                                        <TableHead>股票代码</TableHead>
-                                                        <TableHead>名称</TableHead>
-                                                        <TableHead>行业</TableHead>
-                                                        <TableHead>当前价格</TableHead>
-                                                        <TableHead>日变化</TableHead>
-                                                        <TableHead>交易量</TableHead>
-                                                        <TableHead>市值</TableHead>
-                                                        <TableHead>波动率</TableHead>
-                                                    </TableRow>
-                                                </TableHeader>
-                                                <TableBody>
-                                                    {mockTickerData.map(ticker => (
-                                                        <TableRow key={ticker.ticker}>
-                                                            <TableCell className="font-medium">{ticker.ticker}</TableCell>
-                                                            <TableCell>{ticker.name}</TableCell>
-                                                            <TableCell>{ticker.sector}</TableCell>
-                                                            <TableCell>${ticker.price.toFixed(2)}</TableCell>
-                                                            <TableCell>{getChangeIndicator(ticker.change)}</TableCell>
-                                                            <TableCell>{ticker.volume.toLocaleString()}</TableCell>
-                                                            <TableCell>${(ticker.marketCap / 1000000000).toFixed(2)}B</TableCell>
-                                                            <TableCell>{ticker.volatility}%</TableCell>
+                                            {futuresData.length === 0 ? (
+                                                <div className="text-center py-10 text-gray-500">
+                                                    {connectionStatus === 'connected'
+                                                        ? '等待接收期货数据...'
+                                                        : 'WebSocket连接断开，无法获取数据'}
+                                                </div>
+                                            ) : (
+                                                <Table>
+                                                    <TableHeader>
+                                                        <TableRow>
+                                                            <TableHead>合约代码</TableHead>
+                                                            {/*<TableHead>品种名称</TableHead>*/}
+                                                            {/*<TableHead>交易所</TableHead>*/}
+                                                            {/*<TableHead>到期日期</TableHead>*/}
+                                                            <TableHead>最新价</TableHead>
+                                                            <TableHead>涨跌幅</TableHead>
+                                                            <TableHead>买一价</TableHead>
+                                                            <TableHead>卖一价</TableHead>
+                                                            <TableHead>成交量（手）</TableHead>
+                                                            <TableHead>持仓量（手）</TableHead>
                                                         </TableRow>
-                                                    ))}
-                                                </TableBody>
-                                            </Table>
+                                                    </TableHeader>
+                                                    <TableBody>
+                                                        {futuresData.map(contract => (
+                                                            <TableRow key={contract.instrumentId}>
+                                                                <TableCell className="font-medium">{contract.instrumentId}</TableCell>
+                                                                {/*<TableCell>{contract.productName}</TableCell>*/}
+                                                                {/*<TableCell>{contract.exchange}</TableCell>*/}
+                                                                {/*<TableCell>{contract.expiryDate}</TableCell>*/}
+                                                                <TableCell>{contract.lastPrice.toFixed(2)}</TableCell>
+                                                                <TableCell>{getChangeIndicator(contract.changeRate)}</TableCell>
+                                                                <TableCell>{contract.bidPrice.toFixed(2)}</TableCell>
+                                                                <TableCell>{contract.askPrice.toFixed(2)}</TableCell>
+                                                                <TableCell>{contract.volume.toLocaleString()}</TableCell>
+                                                                <TableCell>{contract.openInterest.toLocaleString()}</TableCell>
+                                                            </TableRow>
+                                                        ))}
+                                                    </TableBody>
+                                                </Table>
+                                            )}
                                         </div>
                                     </Card>
 
-                                    {/* 相关性分析表格 */}
+                                    {/* 其他分析表格（不变） */}
                                     <Card>
                                         <div className="p-5 border-b">
-                                            <h2 className="text-lg font-semibold">股票相关性分析</h2>
+                                            <h2 className="text-lg font-semibold">期货合约相关性分析</h2>
                                         </div>
                                         <div className="p-5">
                                             <Table>
                                                 <TableHeader>
                                                     <TableRow>
-                                                        <TableHead>股票对</TableHead>
+                                                        <TableHead>合约对</TableHead>
                                                         <TableHead>相关系数</TableHead>
                                                         <TableHead>相关性强度</TableHead>
                                                     </TableRow>
                                                 </TableHeader>
                                                 <TableBody>
-                                                    {correlationData.map((item, index) => {
-                                                        // 确定相关性强度
+                                                    {futuresCorrelationData.map((item, index) => {
                                                         let strength = "弱";
                                                         let color = "bg-gray-100 text-gray-800";
-                                                        // 使用const替代let，修复ESLint警告
                                                         const significance = random() < 0.05 ? "显著" : "不显著";
 
                                                         if (Math.abs(item.correlation) > 0.7) {
@@ -702,7 +909,7 @@ export default function TradingAnalysisPage() {
 
                                                         return (
                                                             <TableRow key={index}>
-                                                                <TableCell>{item.ticker1} - {item.ticker2}</TableCell>
+                                                                <TableCell>{item.contract1} - {item.contract2}</TableCell>
                                                                 <TableCell>{item.correlation.toFixed(2)}</TableCell>
                                                                 <TableCell>
                                                                     <Badge className={color}>{strength} {item.correlation > 0 ? "正相关" : "负相关"}</Badge>
@@ -715,28 +922,30 @@ export default function TradingAnalysisPage() {
                                         </div>
                                     </Card>
 
-                                    {/* 聚类分析结果 */}
                                     <Card>
                                         <div className="p-5 border-b">
-                                            <h2 className="text-lg font-semibold">股票聚类分析</h2>
+                                            <h2 className="text-lg font-semibold">期货品种聚类分析</h2>
                                         </div>
                                         <div className="p-5">
                                             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                                                {clusterData.map(cluster => (
+                                                {futuresClusterData.map(cluster => (
                                                     <Card key={cluster.cluster} className="p-4">
-                                                        <h3 className="font-medium mb-3">聚类 {cluster.cluster}</h3>
+                                                        <h3 className="font-medium mb-3">聚类 {cluster.cluster}（{
+                                                            cluster.cluster === 1 ? '金融期货' :
+                                                                cluster.cluster === 2 ? '能源及化工期货' : '金属期货'
+                                                        }）</h3>
                                                         <div className="space-y-2 mb-4">
-                                                            {cluster.tickers.map(ticker => (
-                                                                <div key={ticker} className="flex items-center gap-2">
+                                                            {cluster.contracts.map(contract => (
+                                                                <div key={contract} className="flex items-center gap-2">
                                                                     <div className="w-2 h-2 rounded-full bg-blue-500"></div>
-                                                                    <span>{ticker}</span>
+                                                                    <span>{contract}</span>
                                                                 </div>
                                                             ))}
                                                         </div>
                                                         <div className="text-sm text-gray-600 dark:text-gray-400 space-y-1">
-                                                            <p>平均波动率: {cluster.characteristics['平均波动率']}%</p>
-                                                            <p>平均收益率: {cluster.characteristics['平均收益率']}%</p>
-                                                            <p>市值规模: {cluster.characteristics['市值规模']}B</p>
+                                                            <p>平均持仓量：{cluster.characteristics['平均持仓量（万手）']} 万手</p>
+                                                            <p>平均波动率：{cluster.characteristics['平均波动率（%）']}%</p>
+                                                            <p>平均成交量：{cluster.characteristics['平均成交量（万手）']} 万手</p>
                                                         </div>
                                                     </Card>
                                                 ))}
@@ -746,75 +955,82 @@ export default function TradingAnalysisPage() {
                                 </div>
                             )}
 
-                            {/* 基础统计分析 */}
+                            {/* 其他标签页（均不变，数据源已修复） */}
                             {activeTab === 'statistics' && (
                                 <div className="space-y-6">
                                     <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
                                         <div>
-                                            <h1 className="text-2xl font-bold">基础统计分析</h1>
+                                            <h1 className="text-2xl font-bold">期货基础统计分析</h1>
                                             <p className="text-gray-500 dark:text-gray-400">
-                                                股票交易数据的核心统计指标与分布特征
+                                                期货合约核心统计指标（价格/持仓量/成交量分布特征）
                                             </p>
                                         </div>
                                         <div className="flex gap-3">
                                             <Button onClick={() => exportReport('excel')}>
                                                 <Download className="mr-2 h-4 w-4" />
-                                                导出数据
+                                                导出期货统计数据
                                             </Button>
                                         </div>
                                     </div>
 
                                     <Card>
                                         <div className="p-5">
-                                            <Table>
-                                                <TableHeader>
-                                                    <TableRow>
-                                                        <TableHead>股票代码</TableHead>
-                                                        <TableHead>名称</TableHead>
-                                                        <TableHead>当前价格</TableHead>
-                                                        <TableHead>日变化</TableHead>
-                                                        <TableHead>平均价格</TableHead>
-                                                        <TableHead>价格方差</TableHead>
-                                                        <TableHead>最大价格</TableHead>
-                                                        <TableHead>最小价格</TableHead>
-                                                    </TableRow>
-                                                </TableHeader>
-                                                <TableBody>
-                                                    {mockTickerData.map(ticker => {
-                                                        // 使用固定种子随机数生成器
-                                                        const rowRandom = createRandomGenerator(seed + 10 + mockTickerData.indexOf(ticker));
-                                                        return (
-                                                            <TableRow key={ticker.ticker}>
-                                                                <TableCell className="font-medium">{ticker.ticker}</TableCell>
-                                                                <TableCell>{ticker.name}</TableCell>
-                                                                <TableCell>${ticker.price.toFixed(2)}</TableCell>
-                                                                <TableCell>{getChangeIndicator(ticker.change)}</TableCell>
-                                                                <TableCell>${(ticker.price * (0.9 + rowRandom() * 0.2)).toFixed(2)}</TableCell>
-                                                                <TableCell>{(ticker.price * 0.05 * rowRandom()).toFixed(2)}</TableCell>
-                                                                <TableCell>${(ticker.price * 1.1).toFixed(2)}</TableCell>
-                                                                <TableCell>${(ticker.price * 0.9).toFixed(2)}</TableCell>
+                                            {futuresData.length === 0 ? (
+                                                <div className="text-center py-10 text-gray-500">无期货数据可显示</div>
+                                            ) : (
+                                                <Table>
+                                                    <TableHeader>
+                                                        <TableRow>
+                                                            <TableHead>合约代码</TableHead>
+                                                            <TableHead>最新价</TableHead>
+                                                            <TableHead>涨跌幅</TableHead>
+                                                            <TableHead>买一价</TableHead>
+                                                            <TableHead>买一量</TableHead>
+                                                            <TableHead>卖一价</TableHead>
+                                                            <TableHead>卖一量</TableHead>
+                                                            <TableHead>涨停价</TableHead>
+                                                            <TableHead>跌停价</TableHead>
+                                                            <TableHead>成交量（手）</TableHead>
+                                                            <TableHead>持仓量（手）</TableHead>
+                                                            <TableHead>更新时间</TableHead>
+                                                        </TableRow>
+                                                    </TableHeader>
+                                                    <TableBody>
+                                                        {futuresData.map(contract => (
+                                                            <TableRow key={contract.instrumentId}>
+                                                                <TableCell className="font-medium">{contract.instrumentId}</TableCell>
+                                                                <TableCell>{contract.lastPrice.toFixed(2)}</TableCell>
+                                                                <TableCell>{getChangeIndicator(contract.changeRate)}</TableCell>
+                                                                <TableCell>{contract.bidPrice.toFixed(2)}</TableCell>
+                                                                <TableCell>{contract.bidVolume.toLocaleString()}</TableCell>
+                                                                <TableCell>{contract.askPrice.toFixed(2)}</TableCell>
+                                                                <TableCell>{contract.askVolume.toLocaleString()}</TableCell>
+                                                                <TableCell>{contract.upperLimitPrice.toFixed(2)}</TableCell>
+                                                                <TableCell>{contract.lowerLimitPrice.toFixed(2)}</TableCell>
+                                                                <TableCell>{contract.volume.toLocaleString()}</TableCell>
+                                                                <TableCell>{contract.openInterest.toLocaleString()}</TableCell>
+                                                                <TableCell>{contract.timestamp}</TableCell>
                                                             </TableRow>
-                                                        );
-                                                    })}
-                                                </TableBody>
-                                            </Table>
+                                                        ))}
+                                                    </TableBody>
+                                                </Table>
+                                            )}
                                         </div>
                                     </Card>
                                 </div>
                             )}
 
-                            {/* 其他分析模块内容结构保持不变 */}
                             {activeTab === 'trend' && (
                                 <div className="space-y-6">
                                     <div>
-                                        <h1 className="text-2xl font-bold">趋势预测分析</h1>
+                                        <h1 className="text-2xl font-bold">期货趋势预测分析</h1>
                                         <p className="text-gray-500 dark:text-gray-400">
-                                            基于历史数据预测未来价格走势和市场趋势
+                                            基于期货历史数据（价格/持仓量）预测未来合约走势和市场趋势
                                         </p>
                                     </div>
                                     <Card className="p-6">
                                         <div className="space-y-4">
-                                            <h3 className="text-lg font-medium">价格趋势预测</h3>
+                                            <h3 className="text-lg font-medium">期货价格趋势预测</h3>
                                             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                                                 <div>
                                                     <h4 className="font-medium mb-2">预测模型参数</h4>
@@ -823,46 +1039,50 @@ export default function TradingAnalysisPage() {
                                                             <Label>预测周期</Label>
                                                             <Select defaultValue="30d">
                                                                 <SelectTrigger className="mt-1">
-                                                                    <SelectValue placeholder="选择周期" />
+                                                                    <SelectValue placeholder="选择期货预测周期" />
                                                                 </SelectTrigger>
                                                                 <SelectContent>
                                                                     <SelectItem value="7d">7天</SelectItem>
                                                                     <SelectItem value="30d">30天</SelectItem>
-                                                                    <SelectItem value="90d">90天</SelectItem>
+                                                                    <SelectItem value="90d">90天（合约到期前）</SelectItem>
                                                                 </SelectContent>
                                                             </Select>
                                                         </div>
                                                         <div>
-                                                            <Label>预测模型</Label>
+                                                            <Label>预测模型（期货专用）</Label>
                                                             <Select defaultValue="arima">
                                                                 <SelectTrigger className="mt-1">
-                                                                    <SelectValue placeholder="选择模型" />
+                                                                    <SelectValue placeholder="选择期货预测模型" />
                                                                 </SelectTrigger>
                                                                 <SelectContent>
-                                                                    <SelectItem value="arima">ARIMA</SelectItem>
-                                                                    <SelectItem value="lstm">LSTM神经网络</SelectItem>
-                                                                    <SelectItem value="prophet">Prophet</SelectItem>
+                                                                    <SelectItem value="arima">ARIMA（适合线性趋势）</SelectItem>
+                                                                    <SelectItem value="lstm">LSTM（适合持仓量-价格联动）</SelectItem>
+                                                                    <SelectItem value="prophet">Prophet（适合到期周期预测）</SelectItem>
                                                                 </SelectContent>
                                                             </Select>
                                                         </div>
-                                                        <Button className="w-full">生成预测</Button>
+                                                        <Button className="w-full">生成期货趋势预测</Button>
                                                     </div>
                                                 </div>
                                                 <div>
-                                                    <h4 className="font-medium mb-2">预测结果摘要</h4>
+                                                    <h4 className="font-medium mb-2">期货预测结果摘要</h4>
                                                     <Card className="p-4 h-full">
-                                                        <p className="text-gray-500 mb-4">选择股票和模型后生成预测结果</p>
+                                                        <p className="text-gray-500 mb-4">选择期货合约和模型后生成预测结果</p>
                                                         <div className="space-y-2 text-sm">
                                                             <div className="flex justify-between">
                                                                 <span>预测准确度</span>
                                                                 <Badge>--</Badge>
                                                             </div>
                                                             <div className="flex justify-between">
-                                                                <span>趋势方向</span>
+                                                                <span>趋势方向（主力合约）</span>
                                                                 <Badge>--</Badge>
                                                             </div>
                                                             <div className="flex justify-between">
-                                                                <span>预期波动范围</span>
+                                                                <span>预期波动范围（点）</span>
+                                                                <span>--</span>
+                                                            </div>
+                                                            <div className="flex justify-between">
+                                                                <span>到期前持仓量变化预测</span>
                                                                 <span>--</span>
                                                             </div>
                                                         </div>
@@ -877,9 +1097,9 @@ export default function TradingAnalysisPage() {
                             {activeTab === 'correlation' && (
                                 <div className="space-y-6">
                                     <div>
-                                        <h1 className="text-2xl font-bold">相关性分析</h1>
+                                        <h1 className="text-2xl font-bold">期货合约相关性分析</h1>
                                         <p className="text-gray-500 dark:text-gray-400">
-                                            分析不同股票之间的价格联动关系和相关性强度
+                                            分析不同期货合约之间的价格联动关系（如沪深300与上证50、原油与甲醇）
                                         </p>
                                     </div>
                                     <Card>
@@ -887,18 +1107,16 @@ export default function TradingAnalysisPage() {
                                             <Table>
                                                 <TableHeader>
                                                     <TableRow>
-                                                        <TableHead>股票对</TableHead>
+                                                        <TableHead>期货合约对</TableHead>
                                                         <TableHead>相关系数</TableHead>
                                                         <TableHead>相关性强度</TableHead>
                                                         <TableHead>统计显著性</TableHead>
                                                     </TableRow>
                                                 </TableHeader>
                                                 <TableBody>
-                                                    {correlationData.map((item, index) => {
-                                                        // 确定相关性强度
+                                                    {futuresCorrelationData.map((item, index) => {
                                                         let strength = "弱";
                                                         let color = "bg-gray-100 text-gray-800";
-                                                        // 使用const替代let，修复ESLint警告
                                                         const significance = random() < 0.05 ? "显著" : "不显著";
 
                                                         if (Math.abs(item.correlation) > 0.7) {
@@ -911,7 +1129,7 @@ export default function TradingAnalysisPage() {
 
                                                         return (
                                                             <TableRow key={index}>
-                                                                <TableCell>{item.ticker1} - {item.ticker2}</TableCell>
+                                                                <TableCell>{item.contract1} - {item.contract2}</TableCell>
                                                                 <TableCell>{item.correlation.toFixed(2)}</TableCell>
                                                                 <TableCell>
                                                                     <Badge className={color}>{strength} {item.correlation > 0 ? "正相关" : "负相关"}</Badge>
@@ -931,49 +1149,49 @@ export default function TradingAnalysisPage() {
                                 </div>
                             )}
 
-                            {/* 聚类分析、因子挖掘和报告模块保持不变 */}
                             {activeTab === 'cluster' && (
                                 <div className="space-y-6">
                                     <div>
-                                        <h1 className="text-2xl font-bold">聚类分析</h1>
+                                        <h1 className="text-2xl font-bold">期货品种聚类分析</h1>
                                         <p className="text-gray-500 dark:text-gray-400">
-                                            基于交易特征对股票进行自动分组，识别相似模式
+                                            基于期货合约特征（交易所/持仓量/波动率）自动分组，识别相似交易模式
                                         </p>
                                     </div>
                                     <Card>
                                         <div className="p-5">
                                             <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                                                {clusterData.map(cluster => (
+                                                {futuresClusterData.map(cluster => (
                                                     <Card key={cluster.cluster} className="p-5 border-l-4 border-blue-500">
-                                                        <h3 className="text-lg font-medium mb-3">聚类 {cluster.cluster}</h3>
+                                                        <h3 className="text-lg font-medium mb-3">聚类 {cluster.cluster}（{
+                                                            cluster.cluster === 1 ? '金融期货' :
+                                                                cluster.cluster === 2 ? '能源及化工期货' : '金属期货'
+                                                        }）</h3>
                                                         <div className="space-y-3 mb-4">
                                                             <div>
-                                                                <h4 className="text-sm text-gray-500 mb-1">包含股票</h4>
+                                                                <h4 className="text-sm text-gray-500 mb-1">包含合约</h4>
                                                                 <div className="flex flex-wrap gap-2">
-                                                                    {cluster.tickers.map(ticker => (
-                                                                        <Badge key={ticker} variant="secondary">{ticker}</Badge>
+                                                                    {cluster.contracts.map(contract => (
+                                                                        <Badge key={contract} variant="secondary">{contract}</Badge>
                                                                     ))}
                                                                 </div>
                                                             </div>
                                                         </div>
                                                         <div className="pt-3 border-t">
-                                                            <h4 className="text-sm text-gray-500 mb-2">聚类特征</h4>
+                                                            <h4 className="text-sm text-gray-500 mb-2">聚类特征（期货专用）</h4>
                                                             <div className="space-y-2 text-sm">
                                                                 <div className="flex justify-between">
                                                                     <span>平均波动率</span>
-                                                                    <span className={cluster.characteristics['平均波动率'] > 3 ? 'text-red-500' : 'text-green-500'}>
-                                                                        {cluster.characteristics['平均波动率']}%
+                                                                    <span className={cluster.characteristics['平均波动率（%）'] > 15 ? 'text-red-500' : 'text-green-500'}>
+                                                                        {cluster.characteristics['平均波动率（%）']}%
                                                                     </span>
                                                                 </div>
                                                                 <div className="flex justify-between">
-                                                                    <span>平均收益率</span>
-                                                                    <span className={cluster.characteristics['平均收益率'] > 0 ? 'text-green-500' : 'text-red-500'}>
-                                                                        {cluster.characteristics['平均收益率']}%
-                                                                    </span>
+                                                                    <span>平均持仓量</span>
+                                                                    <span>{cluster.characteristics['平均持仓量（万手）']} 万手</span>
                                                                 </div>
                                                                 <div className="flex justify-between">
-                                                                    <span>市值规模</span>
-                                                                    <span>{cluster.characteristics['市值规模']}B</span>
+                                                                    <span>平均成交量</span>
+                                                                    <span>{cluster.characteristics['平均成交量（万手）']} 万手</span>
                                                                 </div>
                                                             </div>
                                                         </div>
@@ -988,31 +1206,39 @@ export default function TradingAnalysisPage() {
                             {activeTab === 'factors' && (
                                 <div className="space-y-6">
                                     <div>
-                                        <h1 className="text-2xl font-bold">因子挖掘</h1>
+                                        <h1 className="text-2xl font-bold">期货因子挖掘</h1>
                                         <p className="text-gray-500 dark:text-gray-400">
-                                            识别影响股票价格变动的关键因子和驱动因素
+                                            识别影响期货价格变动的关键因子（如持仓量变化、基差、成交量持仓比）
                                         </p>
                                     </div>
                                     <Card className="p-6">
                                         <div className="space-y-4">
-                                            <h3 className="text-lg font-medium">因子分析设置</h3>
+                                            <h3 className="text-lg font-medium">期货因子分析设置</h3>
                                             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                                                 <div>
-                                                    <h4 className="font-medium mb-3">选择分析因子</h4>
+                                                    <h4 className="font-medium mb-3">选择期货分析因子</h4>
                                                     <div className="space-y-2">
-                                                        {['成交量', '波动率', '市盈率', '市值', '换手率', '行业指数', '市场情绪'].map(factor => (
+                                                        {[
+                                                            '持仓量变化率',
+                                                            '成交量持仓比',
+                                                            '基差（现货-期货）',
+                                                            '年化波动率',
+                                                            '主力合约切换信号',
+                                                            '持仓集中度',
+                                                            '期现价差'
+                                                        ].map(factor => (
                                                             <div key={factor} className="flex items-center space-x-2">
                                                                 <Checkbox id={`factor-${factor}`} defaultChecked />
                                                                 <Label htmlFor={`factor-${factor}`}>{factor}</Label>
                                                             </div>
                                                         ))}
                                                     </div>
-                                                    <Button className="mt-4">运行因子分析</Button>
+                                                    <Button className="mt-4">运行期货因子分析</Button>
                                                 </div>
                                                 <div>
-                                                    <h4 className="font-medium mb-3">因子重要性排序</h4>
+                                                    <h4 className="font-medium mb-3">期货因子重要性排序</h4>
                                                     <Card className="p-4 h-full">
-                                                        <p className="text-gray-500 mb-4">运行分析后显示因子重要性结果</p>
+                                                        <p className="text-gray-500 mb-4">运行分析后显示期货因子重要性结果</p>
                                                         <div className="space-y-3">
                                                             {[1, 2, 3, 4, 5].map(i => (
                                                                 <div key={i}>
@@ -1035,29 +1261,29 @@ export default function TradingAnalysisPage() {
                             {activeTab === 'reports' && (
                                 <div className="space-y-6">
                                     <div>
-                                        <h1 className="text-2xl font-bold">分析报告</h1>
+                                        <h1 className="text-2xl font-bold">期货分析报告</h1>
                                         <p className="text-gray-500 dark:text-gray-400">
-                                            生成和管理数据分析报告，支持多种导出格式
+                                            生成和管理期货数据分析报告（含合约价格/持仓量/趋势预测），支持多种导出格式
                                         </p>
                                     </div>
                                     <Card className="p-6">
                                         <div className="flex flex-col items-center justify-center py-8 text-center">
                                             <FileText className="h-16 w-16 text-gray-300 dark:text-gray-600 mb-4" />
-                                            <h3 className="text-lg font-medium mb-2">生成定制化分析报告</h3>
+                                            <h3 className="text-lg font-medium mb-2">生成期货定制化分析报告</h3>
                                             <p className="text-gray-500 dark:text-gray-400 mb-6 max-w-md">
-                                                基于您的分析需求，生成包含关键洞察和可视化图表的专业报告
+                                                基于您的期货分析需求，生成包含合约洞察、趋势预测和可视化图表的专业报告
                                             </p>
                                             <div className="flex flex-col sm:flex-row gap-3 w-full max-w-md">
                                                 <div className="flex-1">
                                                     <Select defaultValue="detailed">
                                                         <SelectTrigger>
-                                                            <SelectValue placeholder="报告类型" />
+                                                            <SelectValue placeholder="期货报告类型" />
                                                         </SelectTrigger>
                                                         <SelectContent>
-                                                            <SelectItem value="summary">摘要报告</SelectItem>
-                                                            <SelectItem value="detailed">详细分析报告</SelectItem>
-                                                            <SelectItem value="factors">因子分析报告</SelectItem>
-                                                            <SelectItem value="prediction">预测报告</SelectItem>
+                                                            <SelectItem value="summary">期货摘要报告</SelectItem>
+                                                            <SelectItem value="detailed">期货详细分析报告</SelectItem>
+                                                            <SelectItem value="factors">期货因子分析报告</SelectItem>
+                                                            <SelectItem value="prediction">期货趋势预测报告</SelectItem>
                                                         </SelectContent>
                                                     </Select>
                                                 </div>
@@ -1068,8 +1294,8 @@ export default function TradingAnalysisPage() {
                                                         </SelectTrigger>
                                                         <SelectContent>
                                                             <SelectItem value="pdf">PDF格式</SelectItem>
-                                                            <SelectItem value="excel">Excel格式</SelectItem>
-                                                            <SelectItem value="ppt">PowerPoint格式</SelectItem>
+                                                            <SelectItem value="excel">Excel格式（含期货原始数据）</SelectItem>
+                                                            <SelectItem value="ppt">PowerPoint格式（汇报用）</SelectItem>
                                                         </SelectContent>
                                                     </Select>
                                                 </div>
@@ -1077,31 +1303,35 @@ export default function TradingAnalysisPage() {
                                             <div className="flex gap-3 mt-4">
                                                 <Button onClick={() => exportReport('pdf')}>
                                                     <Download className="mr-2 h-4 w-4" />
-                                                    生成报告
+                                                    生成期货报告
                                                 </Button>
                                                 <Button variant="secondary">
                                                     <FileText className="mr-2 h-4 w-4" />
-                                                    报告历史
+                                                    期货报告历史
                                                 </Button>
                                             </div>
                                         </div>
                                     </Card>
                                 </div>
                             )}
+
+                            {activeTab === 'stock_index' && (
+                                <StockIndex/>
+                            )}
                         </>
                     )}
                 </main>
             </div>
 
-            {/* 页脚 */}
+            {/* 页脚（不变） */}
             <footer className="border-t bg-white dark:bg-gray-900 py-4">
                 <div className="container flex flex-col md:flex-row items-center justify-between gap-4">
                     <p className="text-sm text-gray-500 dark:text-gray-400">
-                        © 2023 DataThinker. 交易数据分析平台
+                        © 2023 FuturesDataThinker. 期货交易数据分析平台（支持CFFEX/SHFE/INE/ZCE合约）
                     </p>
                     <div className="flex gap-4">
-                        <Button variant="ghost" size="sm">关于</Button>
-                        <Button variant="ghost" size="sm">帮助中心</Button>
+                        <Button variant="ghost" size="sm">关于期货分析</Button>
+                        <Button variant="ghost" size="sm">期货帮助中心</Button>
                         <Button variant="ghost" size="sm">隐私政策</Button>
                     </div>
                 </div>
