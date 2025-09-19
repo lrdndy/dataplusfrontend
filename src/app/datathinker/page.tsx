@@ -275,7 +275,7 @@ export default function FuturesAnalysisPage() {
         }
 
         setConnectionStatus('connecting');
-        const newSocket = new WebSocket("ws://127.0.0.1:8001/depth_md");
+        const newSocket = new WebSocket("ws://127.0.0.1:8001/depth_md/all");
 
         // 连接成功
         newSocket.onopen = () => {
