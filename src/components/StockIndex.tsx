@@ -1,294 +1,237 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
+// 👉 1. 导入封装好的新股指接口函数和类型（从 services/api.ts 导入）
+import { getNewStockIndexData, StockIndexCalculationResponse } from '@/services/api';
 
+// 👉 2. 替换原有的 ApiResponse 类型，直接使用封装好的专属类型
+// （删除原有的 ApiResponse 定义，复用 api.ts 中的 StockIndexCalculationResponse）
+
+// 2. 组件渲染所需数据类型（保持不变）
 interface StockIndexItem {
-    indexName: string;
-    indexPrice: number;
-    contracts: Contract[];
+    indexName: string; // 现货指数名称（沪深300/中证500/中证1000）
+    indexPrice: number; // 现货最新价
+    contracts: Contract[]; // 对应期货合约列表
 }
 
 interface Contract {
-    code: string;
-    price: number;
-    basis?: number;        // 基差
-    remainingDividend?: number; // 剩余分红
-    adjustedBasis?: number; // 调整基差
+    code: string; // 期货合约代码（IF2512等）
+    price: number; // 期货价格
+    basis: number; // 基差（现货价 - 期货价，自动计算）
+    remainingDividend: number; // 剩余分红
+    adjustedBasis: number; // 调整基差
     remainingDays: number; // 剩余天数
-    expiryDate: string;    // 到期日
-    annualizedBasis?: number; // 年化基差
-    adjustedAnnualizedBasis?: number; // 调整年化基差
-    settlementPriceChange?: number; // 结算价涨跌额
-    settlementPriceChangeRate?: number; // 结算价涨跌幅
-    closingPriceChange?: number; // 收盘价涨跌额
-    closingPriceChangeRate?: number; // 收盘价涨跌幅
+    expiryDate: string; // 到期日
+    annualizedBasis: number; // 年化基差（去掉%的数值）
+    adjustedAnnualizedBasis: number; // 调整年化基差（去掉%的数值）
+    settlementPriceChange: number; // 结算价涨跌额
+    settlementPriceChangeRate: number; // 结算价涨跌幅（去掉%的数值）
+    closingPriceChange: number; // 收盘价涨跌额
+    closingPriceChangeRate: number; // 收盘价涨跌幅（去掉%的数值）
 }
 
 const StockIndex: React.FC = () => {
-    // 模拟与截图一致的数据源
-    const mockData: StockIndexItem[] = [
-        {
-            indexName: '沪深300',
-            indexPrice: 4550.58,
-            contracts: [
-                {
-                    code: 'IF2510',
-                    price: 4476,
-                    remainingDividend: 5.659,
-                    adjustedBasis: -16.451,
-                    remainingDays: 29,
-                    expiryDate: '2025-10-17',
-                    annualizedBasis: -6.19,
-                    adjustedAnnualizedBasis: -4.6,
-                    settlementPriceChange: -62.2,
-                    settlementPriceChangeRate: -1.37,
-                    closingPriceChange: -65.8,
-                    closingPriceChangeRate: -1.4,
-                },
-                {
-                    code: 'IF2512',
-                    price: 4448.2,
-                    remainingDividend: 23.633,
-                    adjustedBasis: -26.277,
-                    remainingDays: 92,
-                    expiryDate: '2025-12-19',
-                    annualizedBasis: -4.4,
-                    adjustedAnnualizedBasis: -2.32,
-                    settlementPriceChange: -66.4,
-                    settlementPriceChangeRate: -1.47,
-                    closingPriceChange: -70,
-                    closingPriceChangeRate: -1.5,
-                },
-                {
-                    code: 'IF2603',
-                    price: 4418,
-                    remainingDividend: 41.95,
-                    adjustedBasis: -38.16,
-                    remainingDays: 183,
-                    expiryDate: '2026-03-20',
-                    annualizedBasis: -3.55,
-                    adjustedAnnualizedBasis: -1.69,
-                    settlementPriceChange: -70.2,
-                    settlementPriceChangeRate: -1.56,
-                    closingPriceChange: -74.8,
-                    closingPriceChangeRate: -1.6,
-                },
-            ],
-        },
-        {
-            indexName: '中证500',
-            indexPrice: 7199.88,
-            contracts: [
-                {
-                    code: 'IC2509',
-                    price: 7171.6,
-                    remainingDividend: 0.347,
-                    adjustedBasis: -27.933,
-                    remainingDays: 1,
-                    expiryDate: '2025-09-19',
-                    annualizedBasis: -143.37,
-                    adjustedAnnualizedBasis: -141.61,
-                    settlementPriceChange: -72.6,
-                    settlementPriceChangeRate: -1,
-                    closingPriceChange: -80.8,
-                    closingPriceChangeRate: -1.1,
-                },
-                {
-                    code: 'IC2510',
-                    price: 7114.4,
-                    remainingDividend: 10.064,
-                    adjustedBasis: -75.416,
-                    remainingDays: 29,
-                    expiryDate: '2025-10-17',
-                    annualizedBasis: -14.94,
-                    adjustedAnnualizedBasis: -13.18,
-                    settlementPriceChange: -72,
-                    settlementPriceChangeRate: -1,
-                    closingPriceChange: -82.6,
-                    closingPriceChangeRate: -1.1,
-                },
-                {
-                    code: 'IC2512',
-                    price: 6985.4,
-                    remainingDividend: 21.128,
-                    adjustedBasis: -193.352,
-                    remainingDays: 92,
-                    expiryDate: '2025-12-19',
-                    annualizedBasis: -11.82,
-                    adjustedAnnualizedBasis: -10.65,
-                    settlementPriceChange: -83.2,
-                    settlementPriceChangeRate: -1.18,
-                    closingPriceChange: -95.6,
-                    closingPriceChangeRate: -1.3,
-                },
-                {
-                    code: 'IC2603',
-                    price: 6819.6,
-                    remainingDividend: 25.182,
-                    adjustedBasis: -355.098,
-                    remainingDays: 183,
-                    expiryDate: '2026-03-20',
-                    annualizedBasis: -10.53,
-                    adjustedAnnualizedBasis: -9.84,
-                    settlementPriceChange: -85,
-                    settlementPriceChangeRate: -1.23,
-                    closingPriceChange: -96.4,
-                    closingPriceChangeRate: -1.3,
-                },
-            ],
-        },
-        {
-            indexName: '中证1000',
-            indexPrice: 7476.4,
-            contracts: [
-                {
-                    code: 'IM2509',
-                    price: 7454.8,
-                    remainingDividend: 0.94,
-                    adjustedBasis: -20.66,
-                    remainingDays: 1,
-                    expiryDate: '2025-09-19',
-                    annualizedBasis: -105.45,
-                    adjustedAnnualizedBasis: -100.86,
-                    settlementPriceChange: -89.4,
-                    settlementPriceChangeRate: -1.19,
-                    closingPriceChange: -92.2,
-                    closingPriceChangeRate: -1.2,
-                },
-                {
-                    code: 'IM2510',
-                    price: 7370.2,
-                    remainingDividend: 6.799,
-                    adjustedBasis: -99.401,
-                    remainingDays: 29,
-                    expiryDate: '2025-10-17',
-                    annualizedBasis: -17.88,
-                    adjustedAnnualizedBasis: -16.73,
-                    settlementPriceChange: -107.6,
-                    settlementPriceChangeRate: -1.44,
-                    closingPriceChange: -110,
-                    closingPriceChangeRate: -1.4,
-                },
-                {
-                    code: 'IM2512',
-                    price: 7213.4,
-                    remainingDividend: 16.389,
-                    adjustedBasis: -246.611,
-                    remainingDays: 92,
-                    expiryDate: '2025-12-19',
-                    annualizedBasis: -13.96,
-                    adjustedAnnualizedBasis: -13.09,
-                    settlementPriceChange: -110.6,
-                    settlementPriceChangeRate: -1.51,
-                    closingPriceChange: -118.2,
-                    closingPriceChangeRate: -1.6,
-                },
-                {
-                    code: 'IM2603',
-                    price: 7000,
-                    remainingDividend: 20.177,
-                    adjustedBasis: -456.223,
-                    remainingDays: 183,
-                    expiryDate: '2026-03-20',
-                    annualizedBasis: -12.71,
-                    adjustedAnnualizedBasis: -12.17,
-                    settlementPriceChange: -119.6,
-                    settlementPriceChangeRate: -1.68,
-                    closingPriceChange: -126.2,
-                    closingPriceChangeRate: -1.7,
-                },
-            ],
-        },
-    ];
+    // 3. 状态管理：数据、加载态、错误态、公共信息（保持不变）
+    const [stockData, setStockData] = useState<StockIndexItem[]>([]);
+    const [isLoading, setIsLoading] = useState<boolean>(true);
+    const [errorMsg, setErrorMsg] = useState<string | null>(null);
+    const [updateTime, setUpdateTime] = useState<string>('');
+    const [dividendNote, setDividendNote] = useState<string>('');
 
+    // 👉 4. 删除原有的 API_URL（已在 api.ts 的 stockIndexApi 实例中配置）
+
+    // 5. 工具函数：字符串百分比转数字（保持不变）
+    const parsePercent = (percentStr: string): number => {
+        return parseFloat(percentStr.replace(/%/g, ''));
+    };
+
+    // 6. 工具函数：涨跌颜色控制（保持不变）
+    const getChangeColor = (value: number): string => {
+        return value > 0 ? 'text-red-500' : value < 0 ? 'text-green-500' : '';
+    };
+
+    // 7. 接口请求逻辑：改用封装的 getNewStockIndexData 函数（核心修改）
+    useEffect(() => {
+        const fetchIndexData = async () => {
+            // 重置状态（保持不变）
+            setIsLoading(true);
+            setErrorMsg(null);
+
+            try {
+                // 👉 核心：调用封装好的新股指接口函数（无需手动写 fetch 逻辑）
+                const apiData: StockIndexCalculationResponse = await getNewStockIndexData();
+
+                // 校验接口业务状态（保持不变，api.ts 已做基础错误捕获，这里做业务校验）
+                if (apiData.status !== 'success') {
+                    throw new Error(`数据异常：${apiData.msg}`);
+                }
+
+                // 8. 转换接口数据为组件渲染格式（保持不变）
+                const rawContracts = apiData.data;
+                const indexDataMap: Record<string, StockIndexItem> = {
+                    '沪深300': { indexName: '沪深300', indexPrice: 0, contracts: [] },
+                    '中证500': { indexName: '中证500', indexPrice: 0, contracts: [] },
+                    '中证1000': { indexName: '中证1000', indexPrice: 0, contracts: [] },
+                };
+
+                // 遍历每个期货合约（保持不变）
+                Object.values(rawContracts).forEach(contract => {
+                    const basic = contract.basic_info;
+                    const indicators = contract.target_indicators;
+                    const indexName = basic.对应现货指数;
+
+                    // 构建单个合约数据（保持不变）
+                    const formattedContract: Contract = {
+                        code: basic.期货合约代码,
+                        price: basic.期货价格,
+                        basis: basic.现货最新价 - basic.期货价格, // 自动计算基差
+                        remainingDividend: indicators.剩余分红,
+                        adjustedBasis: indicators.调整基差,
+                        remainingDays: basic.剩余天数,
+                        expiryDate: basic.到期日,
+                        annualizedBasis: parsePercent(indicators.年化基差),
+                        adjustedAnnualizedBasis: parsePercent(indicators.调整年化基差),
+                        settlementPriceChange: indicators.结算价涨跌额,
+                        settlementPriceChangeRate: parsePercent(indicators.结算价涨跌幅),
+                        closingPriceChange: indicators.收盘价涨跌额,
+                        closingPriceChangeRate: parsePercent(indicators.收盘价涨跌幅),
+                    };
+
+                    // 关联合约到对应现货指数（保持不变）
+                    if (indexDataMap[indexName]) {
+                        indexDataMap[indexName].indexPrice = basic.现货最新价;
+                        indexDataMap[indexName].contracts.push(formattedContract);
+                    }
+
+                    // 存储公共信息（保持不变）
+                    setUpdateTime(basic.数据更新时间);
+                    setDividendNote(indicators.剩余分红说明);
+                });
+
+                // 过滤空数据，更新组件状态（保持不变）
+                const validIndexData = Object.values(indexDataMap).filter(
+                    item => item.contracts.length > 0
+                );
+                setStockData(validIndexData);
+
+            } catch (error) {
+                // 捕获错误（api.ts 已包装错误信息，这里直接展示）
+                setErrorMsg(error instanceof Error ? error.message : '未知错误');
+            } finally {
+                // 无论成功失败，结束加载态（保持不变）
+                setIsLoading(false);
+            }
+        };
+
+        // 执行请求（保持不变）
+        fetchIndexData();
+    }, []); // 👉 依赖项删除 API_URL（已在 api.ts 中配置，无需组件内监听）
+
+    // 9. 加载中状态渲染（保持不变）
+    if (isLoading) {
+        return (
+            <div className="flex items-center justify-center h-40 text-gray-500">
+                加载股指数据中...
+            </div>
+        );
+    }
+
+    // 10. 错误状态渲染（保持不变）
+    if (errorMsg) {
+        return (
+            <div className="flex items-center justify-center h-40 text-red-500">
+                加载失败：{errorMsg}
+            </div>
+        );
+    }
+
+    // 11. 成功状态渲染（完整UI，保持不变）
     return (
-        <div className="space-y-4">
-            {/* 标题与数据来源 */}
-            <h2 className="text-xl font-bold text-center mb-2">股指基差</h2>
-            <div className="flex justify-between text-sm text-gray-500 mb-4">
-                <span>数据更新日期：2025-09-18</span>
-                <span>剩余分红数据来源：华泰期货研究院</span>
+        <div className="container mx-auto px-4 py-6">
+            {/* 标题栏 */}
+            <div className="text-center mb-6">
+                <h2 className="text-2xl font-bold text-gray-800">股指基差数据</h2>
+                <div className="flex justify-between mt-2 text-sm text-gray-500">
+                    <span>数据更新时间：{updateTime}</span>
+                    <span>{dividendNote}</span>
+                </div>
             </div>
 
-            {mockData.map((indexItem) => (
-                <div key={indexItem.indexName} className="mb-6">
-                    {/* 指数名称与价格 */}
-                    <div className="flex items-center mb-2">
-                        <span className="text-lg font-semibold mr-2">{indexItem.indexName}</span>
-                        <span className="text-gray-700">{indexItem.indexPrice}</span>
-                    </div>
+            {/* 各指数数据表格 */}
+            <div className="space-y-8">
+                {stockData.map((indexItem) => (
+                    <div key={indexItem.indexName} className="rounded-lg border border-gray-200 shadow-sm overflow-hidden">
+                        {/* 指数标题行 */}
+                        <div className="bg-gray-50 px-4 py-3 border-b border-gray-200">
+                            <div className="flex items-center">
+                <span className="text-lg font-semibold text-gray-800 mr-4">
+                  {indexItem.indexName}
+                </span>
+                                <span className="text-gray-600">现货指数：{indexItem.indexPrice.toFixed(2)}</span>
+                            </div>
+                        </div>
 
-                    {/* 合并表格，添加水平滚动 */}
-                    <div className="overflow-x-auto">
-                        <table className="w-full border-collapse text-sm whitespace-nowrap">
-                            <thead>
-                            <tr className="bg-gray-100">
-                                <th className="border border-gray-200 px-2 py-1 text-left">合约</th>
-                                <th className="border border-gray-200 px-2 py-1 text-right">价格</th>
-                                <th className="border border-gray-200 px-2 py-1 text-right">剩余分红</th>
-                                <th className="border border-gray-200 px-2 py-1 text-right">调整基差</th>
-                                <th className="border border-gray-200 px-2 py-1 text-right">剩余天数</th>
-                                <th className="border border-gray-200 px-2 py-1 text-right">到期日</th>
-                                <th className="border border-gray-200 px-2 py-1 text-right">年化基差</th>
-                                <th className="border border-gray-200 px-2 py-1 text-right">调整年化基差</th>
-                                <th className="border border-gray-200 px-2 py-1 text-right">结算价涨跌额</th>
-                                <th className="border border-gray-200 px-2 py-1 text-right">结算价涨跌幅</th>
-                                <th className="border border-gray-200 px-2 py-1 text-right">收盘价涨跌额</th>
-                                <th className="border border-gray-200 px-2 py-1 text-right">收盘价涨跌幅</th>
-                            </tr>
-                            </thead>
-                            <tbody>
-                            {indexItem.contracts.map((contract) => (
-                                <tr key={contract.code} className="border-b border-gray-200 hover:bg-gray-50">
-                                    <td className="px-2 py-1 font-medium">{contract.code}</td>
-                                    <td className="px-2 py-1 text-right">{contract.price}</td>
-                                    <td className="px-2 py-1 text-right">{contract.remainingDividend ?? '-'}</td>
-                                    <td
-                                        className={`px-2 py-1 text-right ${
-                                            contract.adjustedBasis !== undefined
-                                                ? contract.adjustedBasis >= 0 ? 'text-red-500' : 'text-green-500'
-                                                : ''
-                                        }`}
-                                    >
-                                        {contract.adjustedBasis ?? '-'}
-                                    </td>
-                                    <td className="px-2 py-1 text-right">{contract.remainingDays}</td>
-                                    <td className="px-2 py-1 text-right">{contract.expiryDate}</td>
-                                    <td
-                                        className={`px-2 py-1 text-right ${
-                                            contract.annualizedBasis !== undefined
-                                                ? contract.annualizedBasis >= 0 ? 'text-red-500' : 'text-green-500'
-                                                : ''
-                                        }`}
-                                    >
-                                        {contract.annualizedBasis ?? '-'}%
-                                    </td>
-                                    <td
-                                        className={`px-2 py-1 text-right ${
-                                            contract.adjustedAnnualizedBasis !== undefined
-                                                ? contract.adjustedAnnualizedBasis >= 0 ? 'text-red-500' : 'text-green-500'
-                                                : ''
-                                        }`}
-                                    >
-                                        {contract.adjustedAnnualizedBasis ?? '-'}%
-                                    </td>
-                                    <td className="px-2 py-1 text-right text-green-500">
-                                        {contract.settlementPriceChange ?? '-'}
-                                    </td>
-                                    <td className="px-2 py-1 text-right text-green-500">
-                                        {contract.settlementPriceChangeRate ?? '-'}%
-                                    </td>
-                                    <td className="px-2 py-1 text-right text-green-500">
-                                        {contract.closingPriceChange ?? '-'}
-                                    </td>
-                                    <td className="px-2 py-1 text-right text-green-500">
-                                        {contract.closingPriceChangeRate ?? '-'}%
-                                    </td>
+                        {/* 表格（支持横向滚动） */}
+                        <div className="overflow-x-auto">
+                            <table className="w-full text-sm text-left">
+                                <thead className="bg-gray-100 text-gray-700">
+                                <tr>
+                                    <th className="px-4 py-3 border-b border-gray-200 w-20">合约代码</th>
+                                    <th className="px-4 py-3 border-b border-gray-200 text-right w-24">期货价格</th>
+                                    <th className="px-4 py-3 border-b border-gray-200 text-right w-24">基差</th>
+                                    <th className="px-4 py-3 border-b border-gray-200 text-right w-24">剩余分红</th>
+                                    <th className="px-4 py-3 border-b border-gray-200 text-right w-24">调整基差</th>
+                                    <th className="px-4 py-3 border-b border-gray-200 text-right w-20">剩余天数</th>
+                                    <th className="px-4 py-3 border-b border-gray-200 text-right w-32">到期日</th>
+                                    <th className="px-4 py-3 border-b border-gray-200 text-right w-28">年化基差(%)</th>
+                                    <th className="px-4 py-3 border-b border-gray-200 text-right w-32">调整年化基差(%)</th>
+                                    <th className="px-4 py-3 border-b border-gray-200 text-right w-32">结算价涨跌额</th>
+                                    <th className="px-4 py-3 border-b border-gray-200 text-right w-32">结算价涨跌幅(%)</th>
+                                    <th className="px-4 py-3 border-b border-gray-200 text-right w-32">收盘价涨跌额</th>
+                                    <th className="px-4 py-3 border-b border-gray-200 text-right w-32">收盘价涨跌幅(%)</th>
                                 </tr>
-                            ))}
-                            </tbody>
-                        </table>
+                                </thead>
+                                <tbody className="text-gray-600">
+                                {indexItem.contracts.map((contract) => (
+                                    <tr
+                                        key={contract.code}
+                                        className="hover:bg-gray-50 border-b border-gray-200 last:border-0"
+                                    >
+                                        <td className="px-4 py-3 font-medium">{contract.code}</td>
+                                        <td className="px-4 py-3 text-right">{contract.price.toFixed(2)}</td>
+                                        <td className={`px-4 py-3 text-right ${getChangeColor(contract.basis)}`}>
+                                            {contract.basis.toFixed(2)}
+                                        </td>
+                                        <td className="px-4 py-3 text-right">{contract.remainingDividend.toFixed(3)}</td>
+                                        <td className={`px-4 py-3 text-right ${getChangeColor(contract.adjustedBasis)}`}>
+                                            {contract.adjustedBasis.toFixed(2)}
+                                        </td>
+                                        <td className="px-4 py-3 text-right">{contract.remainingDays}</td>
+                                        <td className="px-4 py-3 text-right">{contract.expiryDate}</td>
+                                        <td className={`px-4 py-3 text-right ${getChangeColor(contract.annualizedBasis)}`}>
+                                            {contract.annualizedBasis.toFixed(2)}
+                                        </td>
+                                        <td className={`px-4 py-3 text-right ${getChangeColor(contract.adjustedAnnualizedBasis)}`}>
+                                            {contract.adjustedAnnualizedBasis.toFixed(2)}
+                                        </td>
+                                        <td className={`px-4 py-3 text-right ${getChangeColor(contract.settlementPriceChange)}`}>
+                                            {contract.settlementPriceChange.toFixed(2)}
+                                        </td>
+                                        <td className={`px-4 py-3 text-right ${getChangeColor(contract.settlementPriceChangeRate)}`}>
+                                            {contract.settlementPriceChangeRate.toFixed(2)}
+                                        </td>
+                                        <td className={`px-4 py-3 text-right ${getChangeColor(contract.closingPriceChange)}`}>
+                                            {contract.closingPriceChange.toFixed(2)}
+                                        </td>
+                                        <td className={`px-4 py-3 text-right ${getChangeColor(contract.closingPriceChangeRate)}`}>
+                                            {contract.closingPriceChangeRate.toFixed(2)}
+                                        </td>
+                                    </tr>
+                                ))}
+                                </tbody>
+                            </table>
+                        </div>
                     </div>
-                </div>
-            ))}
+                ))}
+            </div>
         </div>
     );
 };
