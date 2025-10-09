@@ -33,6 +33,8 @@ import {
     WifiOff
 } from 'lucide-react';
 
+import FuturesTrendForecast from '@/components/FuturesTrendForecast';
+
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -543,7 +545,7 @@ export default function FuturesAnalysisPage() {
                                     </Avatar>
                                 </Button>
                             </DropdownMenuTrigger>
-                            <DropdownMenuContent align="end">
+                            <DropdownMenuContent align="end" className="bg-white">
                                 <DropdownMenuItem>
                                     <User className="mr-2 h-4 w-4" />
                                     <span>个人资料</span>
@@ -712,7 +714,7 @@ export default function FuturesAnalysisPage() {
                                                 <SelectTrigger className="w-[140px]">
                                                     <SelectValue placeholder="选择期货合约" />
                                                 </SelectTrigger>
-                                                <SelectContent>
+                                                <SelectContent className="bg-white">
                                                     <SelectItem value="all">所有合约</SelectItem>
                                                     {futuresData.map(contract => (
                                                         <SelectItem key={contract.instrumentId} value={contract.instrumentId}>
@@ -726,7 +728,7 @@ export default function FuturesAnalysisPage() {
                                                 <SelectTrigger className="w-[120px]">
                                                     <SelectValue placeholder="时间范围" />
                                                 </SelectTrigger>
-                                                <SelectContent>
+                                                <SelectContent className="bg-white">
                                                     <SelectItem value="7d">近7天</SelectItem>
                                                     <SelectItem value="30d">近30天</SelectItem>
                                                     <SelectItem value="90d">近90天</SelectItem>
@@ -763,7 +765,7 @@ export default function FuturesAnalysisPage() {
                                                         导出报告
                                                     </Button>
                                                 </DropdownMenuTrigger>
-                                                <DropdownMenuContent>
+                                                <DropdownMenuContent className="bg-white">
                                                     <DropdownMenuItem onClick={() => exportReport('pdf')}>
                                                         PDF格式（期货分析）
                                                     </DropdownMenuItem>
@@ -1021,79 +1023,8 @@ export default function FuturesAnalysisPage() {
                             )}
 
                             {activeTab === 'trend' && (
-                                <div className="space-y-6">
-                                    <div>
-                                        <h1 className="text-2xl font-bold">期货趋势预测分析</h1>
-                                        <p className="text-gray-500 dark:text-gray-400">
-                                            基于期货历史数据（价格/持仓量）预测未来合约走势和市场趋势
-                                        </p>
-                                    </div>
-                                    <Card className="p-6">
-                                        <div className="space-y-4">
-                                            <h3 className="text-lg font-medium">期货价格趋势预测</h3>
-                                            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                                                <div>
-                                                    <h4 className="font-medium mb-2">预测模型参数</h4>
-                                                    <div className="space-y-3">
-                                                        <div>
-                                                            <Label>预测周期</Label>
-                                                            <Select defaultValue="30d">
-                                                                <SelectTrigger className="mt-1">
-                                                                    <SelectValue placeholder="选择期货预测周期" />
-                                                                </SelectTrigger>
-                                                                <SelectContent>
-                                                                    <SelectItem value="7d">7天</SelectItem>
-                                                                    <SelectItem value="30d">30天</SelectItem>
-                                                                    <SelectItem value="90d">90天（合约到期前）</SelectItem>
-                                                                </SelectContent>
-                                                            </Select>
-                                                        </div>
-                                                        <div>
-                                                            <Label>预测模型（期货专用）</Label>
-                                                            <Select defaultValue="arima">
-                                                                <SelectTrigger className="mt-1">
-                                                                    <SelectValue placeholder="选择期货预测模型" />
-                                                                </SelectTrigger>
-                                                                <SelectContent>
-                                                                    <SelectItem value="arima">ARIMA（适合线性趋势）</SelectItem>
-                                                                    <SelectItem value="lstm">LSTM（适合持仓量-价格联动）</SelectItem>
-                                                                    <SelectItem value="prophet">Prophet（适合到期周期预测）</SelectItem>
-                                                                </SelectContent>
-                                                            </Select>
-                                                        </div>
-                                                        <Button className="w-full">生成期货趋势预测</Button>
-                                                    </div>
-                                                </div>
-                                                <div>
-                                                    <h4 className="font-medium mb-2">期货预测结果摘要</h4>
-                                                    <Card className="p-4 h-full">
-                                                        <p className="text-gray-500 mb-4">选择期货合约和模型后生成预测结果</p>
-                                                        <div className="space-y-2 text-sm">
-                                                            <div className="flex justify-between">
-                                                                <span>预测准确度</span>
-                                                                <Badge>--</Badge>
-                                                            </div>
-                                                            <div className="flex justify-between">
-                                                                <span>趋势方向（主力合约）</span>
-                                                                <Badge>--</Badge>
-                                                            </div>
-                                                            <div className="flex justify-between">
-                                                                <span>预期波动范围（点）</span>
-                                                                <span>--</span>
-                                                            </div>
-                                                            <div className="flex justify-between">
-                                                                <span>到期前持仓量变化预测</span>
-                                                                <span>--</span>
-                                                            </div>
-                                                        </div>
-                                                    </Card>
-                                                </div>
-                                            </div>
-                                        </div>
-                                    </Card>
-                                </div>
+                                <FuturesTrendForecast />
                             )}
-
                             {activeTab === 'correlation' && (
                                 <div className="space-y-6">
                                     <div>
