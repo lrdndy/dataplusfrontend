@@ -3,7 +3,8 @@ import { useEffect, useState, useRef, useCallback } from 'react';
 import { getHelloMessage, getServerTime, getStockData } from '@/services/api';
 import StockChart from '@/components/StockChart';
 import Link from 'next/link';
-
+import { useSession, signOut } from 'next-auth/react';
+import { useRouter } from 'next/navigation';
 // 导出股票数据类型，供 StockChart 使用
 export interface StockItem {
   date: string;
@@ -39,6 +40,13 @@ const LoadingSpinner = () => (
 );
 
 export default function Home() {
+
+
+  const { data: session, status } = useSession();
+  const router = useRouter();
+
+
+
   // 基础数据状态
   const [helloData, setHelloData] = useState<HelloResponse | null>(null);
   const [timeData, setTimeData] = useState<TimeResponse | null>(null);
@@ -52,6 +60,12 @@ export default function Home() {
   const [stockLoaded, setStockLoaded] = useState(false);
 
 
+  useEffect(() => {
+    // 仅在 status 为未登录时跳转，且确保在组件渲染完成后执行
+    if (status === 'unauthenticated') {
+      router.push('/login');
+    }
+  }, [status, router]); // 依赖 status 和 router，状态变化时触发
   // 加载基础数据（仅获取 Hello 信息，时间由定时器单独处理）
   useEffect(() => {
     const fetchBaseData = async () => {
@@ -139,6 +153,8 @@ export default function Home() {
         </div>
       </div>
   );
+
+
 
   // 页面渲染（全局深色主题）
   return (

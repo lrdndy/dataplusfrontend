@@ -53,7 +53,8 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Label } from '@/components/ui/label';
 import StockIndex from "@/components/StockIndex";
-
+import { useSession } from 'next-auth/react';
+import { useRouter } from 'next/navigation';
 // 固定种子的随机数生成器（保留）
 const createRandomGenerator = (seed: number) => {
     return () => {
@@ -244,6 +245,10 @@ const generateFuturesClusterData = (contracts: string[]): FuturesClusterData[] =
 };
 
 export default function FuturesAnalysisPage() {
+
+    const { status } = useSession();
+    const router = useRouter();
+
     const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
     const [activeTab, setActiveTab] = useState('overview');
     const [selectedContract, setSelectedContract] = useState('all');
@@ -494,7 +499,10 @@ export default function FuturesAnalysisPage() {
     if (!isClient) {
         return <div className="min-h-screen"></div>;
     }
-
+    if (status === 'unauthenticated') {
+        router.push('/login');
+        return null;
+    }
     return (
         <div className="flex flex-col min-h-screen bg-gray-50 dark:bg-gray-900 text-gray-900 dark:text-gray-100">
             {/* 顶部导航栏（不变） */}
