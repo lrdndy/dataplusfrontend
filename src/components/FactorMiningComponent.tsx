@@ -473,7 +473,6 @@ const FactorMiningComponent: React.FC = () => {
                         <TabsList className="mb-4">
                             <TabsTrigger value="backtest">回测指标</TabsTrigger>
                         </TabsList>
-
                         <TabsContent value="backtest" className="space-y-6">
                             <Card>
                                 <CardHeader className="py-4">
@@ -481,46 +480,39 @@ const FactorMiningComponent: React.FC = () => {
                                 </CardHeader>
                                 <CardContent>
                                     <div className="overflow-x-auto">
-                                        {/* 正确的组件层级：Table → TableHead → TableRow → TableCell */}
-                                        <Table>
-                                            {/* 表头部分：严格遵循 TableHead → TableRow → TableCell */}
-                                            <TableHead>
-                                                <TableRow> {/* TableHead 直接包含 TableRow */}
-                                                    {/* 所有表头单元格用 TableCell，组件内部会自动渲染为 <th> */}
-                                                    <TableCell>因子名称</TableCell>
-                                                    <TableCell>年化收益率</TableCell>
-                                                    <TableCell>夏普比率</TableCell>
-                                                    <TableCell>最大回撤</TableCell>
-                                                    <TableCell>胜率</TableCell>
-                                                    <TableCell>年化换手率</TableCell>
-                                                </TableRow>
-                                            </TableHead>
-
-                                            {/* 内容部分：严格遵循 TableBody → TableRow → TableCell */}
-                                            <TableBody>
-                                                {Object.entries(analysisResult.backtestMetrics).map(([factorName, metrics], i) => (
-                                                    <TableRow key={i}> {/* TableBody 直接包含 TableRow */}
-                                                        {/* 内容单元格用 TableCell，组件内部会自动渲染为 <td> */}
-                                                        <TableCell>{factorName}</TableCell>
-                                                        <TableCell className={metrics.annualReturn >= 0.1 ? 'text-green-600' : ''}>
-                                                            {(metrics.annualReturn * 100).toFixed(2)}%
-                                                        </TableCell>
-                                                        <TableCell className={metrics.sharpeRatio >= 1.5 ? 'text-green-600' : ''}>
-                                                            {metrics.sharpeRatio.toFixed(2)}
-                                                        </TableCell>
-                                                        <TableCell className={metrics.maxDrawdown <= 0.1 ? 'text-green-600' : ''}>
-                                                            {(metrics.maxDrawdown * 100).toFixed(2)}%
-                                                        </TableCell>
-                                                        <TableCell className={metrics.winRate >= 0.6 ? 'text-green-600' : ''}>
-                                                            {(metrics.winRate * 100).toFixed(2)}%
-                                                        </TableCell>
-                                                        <TableCell>
-                                                            {metrics.turnover.toFixed(2)}x
-                                                        </TableCell>
-                                                    </TableRow>
-                                                ))}
-                                            </TableBody>
-                                        </Table>
+                                        {/* 关键：<tbody> 内部紧凑排列，无空格/换行 */}
+                                        <Table><tbody data-slot="table-body">
+                                        {/* 表头行：紧跟 <tbody> 开始标签，无换行 */}
+                                        <TableRow className="text-foreground h-10 px-2 text-left align-middle font-medium whitespace-nowrap">
+                                            <TableCell>因子名称</TableCell>
+                                            <TableCell>年化收益率</TableCell>
+                                            <TableCell>夏普比率</TableCell>
+                                            <TableCell>最大回撤</TableCell>
+                                            <TableCell>胜率</TableCell>
+                                            <TableCell>年化换手率</TableCell>
+                                        </TableRow>
+                                        {/* 内容行：与表头行紧凑排列，无多余换行 */}
+                                        {Object.entries(analysisResult.backtestMetrics).map(([factorName, metrics], i) => (
+                                            <TableRow key={i} className="hover:bg-muted/50 border-b transition-colors">
+                                                <TableCell>{factorName}</TableCell>
+                                                <TableCell className={metrics.annualReturn >= 0.1 ? 'text-green-600' : ''}>
+                                                    {(metrics.annualReturn * 100).toFixed(2)}%
+                                                </TableCell>
+                                                <TableCell className={metrics.sharpeRatio >= 1.5 ? 'text-green-600' : ''}>
+                                                    {metrics.sharpeRatio.toFixed(2)}
+                                                </TableCell>
+                                                <TableCell className={metrics.maxDrawdown <= 0.1 ? 'text-green-600' : ''}>
+                                                    {(metrics.maxDrawdown * 100).toFixed(2)}%
+                                                </TableCell>
+                                                <TableCell className={metrics.winRate >= 0.6 ? 'text-green-600' : ''}>
+                                                    {(metrics.winRate * 100).toFixed(2)}%
+                                                </TableCell>
+                                                <TableCell>
+                                                    {metrics.turnover.toFixed(2)}x
+                                                </TableCell>
+                                            </TableRow>
+                                        ))}
+                                        </tbody></Table> {/* <tbody> 闭合标签与内容紧凑排列 */}
                                     </div>
                                 </CardContent>
                             </Card>
