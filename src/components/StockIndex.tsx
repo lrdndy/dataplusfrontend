@@ -12,7 +12,7 @@ interface StockIndexItem {
     contracts: Contract[]; // 对应期货合约列表
 }
 
-interface Contract {
+export interface Contract {
     code: string; // 期货合约代码（IF2512等）
     price: number; // 期货价格
     basis: number; // 基差（现货价 - 期货价，自动计算）

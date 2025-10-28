@@ -247,30 +247,30 @@ export default function Home() {
 
             {/* 功能按钮组（科技感悬浮样式） */}
             <div className="flex flex-wrap gap-3 md:gap-4 justify-center">
-              <Link
-                  href="/dataclean"
-                  className="px-5 py-2.5 bg-slate-700/50 border border-cyan-500/30 text-cyan-300 rounded-lg hover:bg-cyan-900/30 hover:shadow-lg hover:shadow-cyan-500/10 transition-all duration-300 hover:-translate-y-0.5"
-              >
-                数据清洗模块
-              </Link>
+              {/*<Link*/}
+              {/*    href="/dataclean"*/}
+              {/*    className="px-5 py-2.5 bg-slate-700/50 border border-cyan-500/30 text-cyan-300 rounded-lg hover:bg-cyan-900/30 hover:shadow-lg hover:shadow-cyan-500/10 transition-all duration-300 hover:-translate-y-0.5"*/}
+              {/*>*/}
+              {/*  数据清洗模块*/}
+              {/*</Link>*/}
               <Link
                   href="/datathinker"
                   className="px-5 py-2.5 bg-slate-700/50 border border-emerald-500/30 text-emerald-300 rounded-lg hover:bg-emerald-900/30 hover:shadow-lg hover:shadow-emerald-500/10 transition-all duration-300 hover:-translate-y-0.5"
               >
                 数据思维模块
               </Link>
-              <Link
-                  href="/factorfinder"
-                  className="px-5 py-2.5 bg-slate-700/50 border border-purple-500/30 text-purple-300 rounded-lg hover:bg-purple-900/30 hover:shadow-lg hover:shadow-purple-500/10 transition-all duration-300 hover:-translate-y-0.5"
-              >
-                因子发现模块
-              </Link>
-              <Link
-                  href="/factorthinker"
-                  className="px-5 py-2.5 bg-slate-700/50 border border-orange-500/30 text-orange-300 rounded-lg hover:bg-orange-900/30 hover:shadow-lg hover:shadow-orange-500/10 transition-all duration-300 hover:-translate-y-0.5"
-              >
-                因子思维模块
-              </Link>
+              {/*<Link*/}
+              {/*    href="/factorfinder"*/}
+              {/*    className="px-5 py-2.5 bg-slate-700/50 border border-purple-500/30 text-purple-300 rounded-lg hover:bg-purple-900/30 hover:shadow-lg hover:shadow-purple-500/10 transition-all duration-300 hover:-translate-y-0.5"*/}
+              {/*>*/}
+              {/*  因子发现模块*/}
+              {/*</Link>*/}
+              {/*<Link*/}
+              {/*    href="/factorthinker"*/}
+              {/*    className="px-5 py-2.5 bg-slate-700/50 border border-orange-500/30 text-orange-300 rounded-lg hover:bg-orange-900/30 hover:shadow-lg hover:shadow-orange-500/10 transition-all duration-300 hover:-translate-y-0.5"*/}
+              {/*>*/}
+              {/*  因子思维模块*/}
+              {/*</Link>*/}
             </div>
           </div>
 

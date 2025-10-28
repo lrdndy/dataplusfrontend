@@ -55,6 +55,7 @@ import { Label } from '@/components/ui/label';
 import StockIndex from "@/components/StockIndex";
 import { useSession } from 'next-auth/react';
 import { useRouter } from 'next/navigation';
+import FactorMiningComponent from "@/components/FactorMiningComponent";
 // 固定种子的随机数生成器（保留）
 const createRandomGenerator = (seed: number) => {
     return () => {
@@ -1143,58 +1144,7 @@ export default function FuturesAnalysisPage() {
                             )}
 
                             {activeTab === 'factors' && (
-                                <div className="space-y-6">
-                                    <div>
-                                        <h1 className="text-2xl font-bold">期货因子挖掘</h1>
-                                        <p className="text-gray-500 dark:text-gray-400">
-                                            识别影响期货价格变动的关键因子（如持仓量变化、基差、成交量持仓比）
-                                        </p>
-                                    </div>
-                                    <Card className="p-6">
-                                        <div className="space-y-4">
-                                            <h3 className="text-lg font-medium">期货因子分析设置</h3>
-                                            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                                                <div>
-                                                    <h4 className="font-medium mb-3">选择期货分析因子</h4>
-                                                    <div className="space-y-2">
-                                                        {[
-                                                            '持仓量变化率',
-                                                            '成交量持仓比',
-                                                            '基差（现货-期货）',
-                                                            '年化波动率',
-                                                            '主力合约切换信号',
-                                                            '持仓集中度',
-                                                            '期现价差'
-                                                        ].map(factor => (
-                                                            <div key={factor} className="flex items-center space-x-2">
-                                                                <Checkbox id={`factor-${factor}`} defaultChecked />
-                                                                <Label htmlFor={`factor-${factor}`}>{factor}</Label>
-                                                            </div>
-                                                        ))}
-                                                    </div>
-                                                    <Button className="mt-4">运行期货因子分析</Button>
-                                                </div>
-                                                <div>
-                                                    <h4 className="font-medium mb-3">期货因子重要性排序</h4>
-                                                    <Card className="p-4 h-full">
-                                                        <p className="text-gray-500 mb-4">运行分析后显示期货因子重要性结果</p>
-                                                        <div className="space-y-3">
-                                                            {[1, 2, 3, 4, 5].map(i => (
-                                                                <div key={i}>
-                                                                    <div className="flex justify-between text-sm mb-1">
-                                                                        <span>因子 {i}</span>
-                                                                        <span>--%</span>
-                                                                    </div>
-                                                                    <Progress value={0} className="h-2" />
-                                                                </div>
-                                                            ))}
-                                                        </div>
-                                                    </Card>
-                                                </div>
-                                            </div>
-                                        </div>
-                                    </Card>
-                                </div>
+                                <FactorMiningComponent/>
                             )}
 
                             {activeTab === 'reports' && (
@@ -1266,7 +1216,7 @@ export default function FuturesAnalysisPage() {
             <footer className="border-t bg-white dark:bg-gray-900 py-4">
                 <div className="container flex flex-col md:flex-row items-center justify-between gap-4">
                     <p className="text-sm text-gray-500 dark:text-gray-400">
-                        © 2023 FuturesDataThinker. 期货交易数据分析平台（支持CFFEX/SHFE/INE/ZCE合约）
+                        ©FuturesDataThinker. 期货交易数据分析平台（支持CFFEX/SHFE/INE/ZCE合约）
                     </p>
                     <div className="flex gap-4">
                         <Button variant="ghost" size="sm">关于期货分析</Button>
