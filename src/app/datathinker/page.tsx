@@ -245,11 +245,66 @@ const generateFuturesClusterData = (contracts: string[]): FuturesClusterData[] =
     return clusters;
 };
 
-export default function FuturesAnalysisPage() {
+/**
+ * 进阶JSON数据清洗：覆盖语法错误、数据错误、结构错误全场景
+ * @param rawData 后端原始WebSocket数据
+ * @returns 清洗后可尝试解析的JSON字符串
+ */
+const advancedCleanJsonData = (rawData: string): string => {
+    if (!rawData || typeof rawData !== 'string') return '{}';
+    let cleaned = rawData.trim();
+    // --------------------------
+    // 1. 先尝试直接解析，若合法则不做修改（核心优化）
+    // --------------------------
+    try {
+        JSON.parse(cleaned);
+        return cleaned; // 原始数据合法，直接返回
+    } catch (e) {
+        // 原始数据无效，才进行修复
+        console.warn("【前端】原始数据不合法，进行修复", e);
+    }
+    // --------------------------
+    // 2. 仅修复明确的错误（最小化干预）
+    // --------------------------
+    // 2.1 修复首尾结构（仅补全缺失的括号）
+    if (!cleaned.startsWith('{')) {
+        const firstBrace = cleaned.indexOf('{');
+        cleaned = firstBrace !== -1 ? cleaned.slice(firstBrace) : '{}';
+    }
+    if (!cleaned.endsWith('}')) {
+        cleaned += '}';
+    }
+    // 2.2 修复属性名缺失引号（仅处理明显的无引号属性名）
+    cleaned = cleaned.replace(/([^":\s]+\s*):/g, '"$1":'); // 如 key: → "key":
+    // 2.3 修复字符串未闭合（仅补全缺失的结尾引号）
+    const quoteCount = (cleaned.match(/"/g) || []).length;
+    if (quoteCount % 2 !== 0) {
+        cleaned += '"';
+    }
+    // 2.4 修复属性间缺少逗号（仅在明确的属性值后补逗号）
+    cleaned = cleaned.replace(/([}\]])(\s*"[^"]+":)/g, '$1,$2'); // 如 }"key": → },"key":
+    cleaned = cleaned.replace(/(\d)(\s*"[^"]+":)/g, '$1,$2'); // 如 123"key": → 123,"key":
+    // 2.5 移除多余的逗号（仅末尾逗号）
+    cleaned = cleaned.replace(/,\s*([}\]])/g, '$1');
+    // 2.6 修复数值中的错误（仅恢复明显的小数点丢失）
+    cleaned = cleaned.replace(/(\d+)([eE][+-]?\d+)/g, '$1.$2'); // 如 1797e308 → 1.797e308（针对科学计数法）
+    cleaned = cleaned.replace(/(\d)([^\d.]{1,2}\d)/g, '$1.$2'); // 如 72400 → 7240.0（针对明显的小数）
+    // --------------------------
+    // 3. 最终校验
+    // --------------------------
+    try {
+        JSON.parse(cleaned);
+        return cleaned;
+    } catch (finalErr) {
+        console.error("【前端】修复后仍无效", finalErr, "修复后数据:", cleaned);
+        return '{}';
+    }
+};
 
+
+export default function FuturesAnalysisPage() {
     const { status } = useSession();
     const router = useRouter();
-
     const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
     const [activeTab, setActiveTab] = useState('overview');
     const [selectedContract, setSelectedContract] = useState('all');
@@ -257,13 +312,11 @@ export default function FuturesAnalysisPage() {
     const [analysisLoading, setAnalysisLoading] = useState(false);
     const [progress, setProgress] = useState(0);
     const [isClient, setIsClient] = useState(false);
-
     const [reconnectTimer, setReconnectTimer] = useState(null);
     const [futuresData, setFuturesData] = useState<FuturesContractData[]>([]);
     const [connectionStatus, setConnectionStatus] = useState<'connecting' | 'connected' | 'disconnected'>('connecting');
     const [lastUpdateTime, setLastUpdateTime] = useState('');
     const socketRef = useRef<WebSocket | null>(null); // 替换 useState 存储 socket
-
     // -------------------------- 现货数据状态 --------------------------
     const [spotPrice, setSpotPrice] = useState<number | null>(null); // 现货价格
     const [spotLoading, setSpotLoading] = useState(false); // 现货加载状态
@@ -295,9 +348,11 @@ export default function FuturesAnalysisPage() {
 
         // 接收消息（核心：更新期货数据）
         newSocket.onmessage = (event) => {
-            // console.log("【前端】收到原始数据：", event.data);
+            //console.log("【前端】收到原始数据：", event.data);
             try {
-                const wsData: WebSocketFuturesData = JSON.parse(event.data);
+                const cleanedData = advancedCleanJsonData(event.data);
+                //console.log("clean之后的数据：", cleanedData);
+                const wsData: WebSocketFuturesData = JSON.parse(cleanedData);
                 //const staticInfo = contractStaticInfo[wsData.instrument_id] || {};
                 if (wsData && wsData.instrument_id) {
                     const formattedData: FuturesContractData = {
