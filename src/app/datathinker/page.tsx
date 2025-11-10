@@ -680,14 +680,14 @@ export default function FuturesAnalysisPage() {
                             <Zap className="mr-2 h-4 w-4" />
                             期货因子挖掘
                         </Button>
-                        <Button
-                            variant={activeTab === 'reports' ? 'default' : 'ghost'}
-                            className="w-full justify-start"
-                            onClick={() => setActiveTab('reports')}
-                        >
-                            <FileText className="mr-2 h-4 w-4" />
-                            期货分析报告
-                        </Button>
+                        {/*<Button*/}
+                        {/*    variant={activeTab === 'reports' ? 'default' : 'ghost'}*/}
+                        {/*    className="w-full justify-start"*/}
+                        {/*    onClick={() => setActiveTab('reports')}*/}
+                        {/*>*/}
+                        {/*    <FileText className="mr-2 h-4 w-4" />*/}
+                        {/*    期货分析报告*/}
+                        {/*</Button>*/}
                         <Button
                             variant={activeTab === 'stock_index' ? 'default' : 'ghost'}
                             className="w-full justify-start"
@@ -1202,62 +1202,62 @@ export default function FuturesAnalysisPage() {
                                 <FactorMiningComponent/>
                             )}
 
-                            {activeTab === 'reports' && (
-                                <div className="space-y-6">
-                                    <div>
-                                        <h1 className="text-2xl font-bold">期货分析报告</h1>
-                                        <p className="text-gray-500 dark:text-gray-400">
-                                            生成和管理期货数据分析报告（含合约价格/持仓量/趋势预测），支持多种导出格式
-                                        </p>
-                                    </div>
-                                    <Card className="p-6">
-                                        <div className="flex flex-col items-center justify-center py-8 text-center">
-                                            <FileText className="h-16 w-16 text-gray-300 dark:text-gray-600 mb-4" />
-                                            <h3 className="text-lg font-medium mb-2">生成期货定制化分析报告</h3>
-                                            <p className="text-gray-500 dark:text-gray-400 mb-6 max-w-md">
-                                                基于您的期货分析需求，生成包含合约洞察、趋势预测和可视化图表的专业报告
-                                            </p>
-                                            <div className="flex flex-col sm:flex-row gap-3 w-full max-w-md">
-                                                <div className="flex-1">
-                                                    <Select defaultValue="detailed">
-                                                        <SelectTrigger>
-                                                            <SelectValue placeholder="期货报告类型" />
-                                                        </SelectTrigger>
-                                                        <SelectContent>
-                                                            <SelectItem value="summary">期货摘要报告</SelectItem>
-                                                            <SelectItem value="detailed">期货详细分析报告</SelectItem>
-                                                            <SelectItem value="factors">期货因子分析报告</SelectItem>
-                                                            <SelectItem value="prediction">期货趋势预测报告</SelectItem>
-                                                        </SelectContent>
-                                                    </Select>
-                                                </div>
-                                                <div className="flex-1">
-                                                    <Select defaultValue="pdf">
-                                                        <SelectTrigger>
-                                                            <SelectValue placeholder="导出格式" />
-                                                        </SelectTrigger>
-                                                        <SelectContent>
-                                                            <SelectItem value="pdf">PDF格式</SelectItem>
-                                                            <SelectItem value="excel">Excel格式（含期货原始数据）</SelectItem>
-                                                            <SelectItem value="ppt">PowerPoint格式（汇报用）</SelectItem>
-                                                        </SelectContent>
-                                                    </Select>
-                                                </div>
-                                            </div>
-                                            <div className="flex gap-3 mt-4">
-                                                <Button onClick={() => exportReport('pdf')}>
-                                                    <Download className="mr-2 h-4 w-4" />
-                                                    生成期货报告
-                                                </Button>
-                                                <Button variant="secondary">
-                                                    <FileText className="mr-2 h-4 w-4" />
-                                                    期货报告历史
-                                                </Button>
-                                            </div>
-                                        </div>
-                                    </Card>
-                                </div>
-                            )}
+                            {/*{activeTab === 'reports' && (*/}
+                            {/*    <div className="space-y-6">*/}
+                            {/*        <div>*/}
+                            {/*            <h1 className="text-2xl font-bold">期货分析报告</h1>*/}
+                            {/*            <p className="text-gray-500 dark:text-gray-400">*/}
+                            {/*                生成和管理期货数据分析报告（含合约价格/持仓量/趋势预测），支持多种导出格式*/}
+                            {/*            </p>*/}
+                            {/*        </div>*/}
+                            {/*        <Card className="p-6">*/}
+                            {/*            <div className="flex flex-col items-center justify-center py-8 text-center">*/}
+                            {/*                <FileText className="h-16 w-16 text-gray-300 dark:text-gray-600 mb-4" />*/}
+                            {/*                <h3 className="text-lg font-medium mb-2">生成期货定制化分析报告</h3>*/}
+                            {/*                <p className="text-gray-500 dark:text-gray-400 mb-6 max-w-md">*/}
+                            {/*                    基于您的期货分析需求，生成包含合约洞察、趋势预测和可视化图表的专业报告*/}
+                            {/*                </p>*/}
+                            {/*                <div className="flex flex-col sm:flex-row gap-3 w-full max-w-md">*/}
+                            {/*                    <div className="flex-1">*/}
+                            {/*                        <Select defaultValue="detailed">*/}
+                            {/*                            <SelectTrigger>*/}
+                            {/*                                <SelectValue placeholder="期货报告类型" />*/}
+                            {/*                            </SelectTrigger>*/}
+                            {/*                            <SelectContent>*/}
+                            {/*                                <SelectItem value="summary">期货摘要报告</SelectItem>*/}
+                            {/*                                <SelectItem value="detailed">期货详细分析报告</SelectItem>*/}
+                            {/*                                <SelectItem value="factors">期货因子分析报告</SelectItem>*/}
+                            {/*                                <SelectItem value="prediction">期货趋势预测报告</SelectItem>*/}
+                            {/*                            </SelectContent>*/}
+                            {/*                        </Select>*/}
+                            {/*                    </div>*/}
+                            {/*                    <div className="flex-1">*/}
+                            {/*                        <Select defaultValue="pdf">*/}
+                            {/*                            <SelectTrigger>*/}
+                            {/*                                <SelectValue placeholder="导出格式" />*/}
+                            {/*                            </SelectTrigger>*/}
+                            {/*                            <SelectContent>*/}
+                            {/*                                <SelectItem value="pdf">PDF格式</SelectItem>*/}
+                            {/*                                <SelectItem value="excel">Excel格式（含期货原始数据）</SelectItem>*/}
+                            {/*                                <SelectItem value="ppt">PowerPoint格式（汇报用）</SelectItem>*/}
+                            {/*                            </SelectContent>*/}
+                            {/*                        </Select>*/}
+                            {/*                    </div>*/}
+                            {/*                </div>*/}
+                            {/*                <div className="flex gap-3 mt-4">*/}
+                            {/*                    <Button onClick={() => exportReport('pdf')}>*/}
+                            {/*                        <Download className="mr-2 h-4 w-4" />*/}
+                            {/*                        生成期货报告*/}
+                            {/*                    </Button>*/}
+                            {/*                    <Button variant="secondary">*/}
+                            {/*                        <FileText className="mr-2 h-4 w-4" />*/}
+                            {/*                        期货报告历史*/}
+                            {/*                    </Button>*/}
+                            {/*                </div>*/}
+                            {/*            </div>*/}
+                            {/*        </Card>*/}
+                            {/*    </div>*/}
+                            {/*)}*/}
 
                             {activeTab === 'stock_index' && (
                                 <StockIndex/>
