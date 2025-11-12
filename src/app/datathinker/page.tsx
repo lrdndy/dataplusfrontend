@@ -56,6 +56,8 @@ import StockIndex from "@/components/StockIndex";
 import { useSession } from 'next-auth/react';
 import { useRouter } from 'next/navigation';
 import FactorMiningComponent from "@/components/FactorMiningComponent";
+import FuturesCorrelationPage from "@/components/FuturesCorrelationPage";
+import FuturesCorrelationTable from "@/components/FuturesCorrelationTable";
 // 固定种子的随机数生成器（保留）
 const createRandomGenerator = (seed: number) => {
     return () => {
@@ -88,7 +90,7 @@ interface WebSocketFuturesData {
     timestamp: string;
 }
 
-interface FuturesContractData {
+export interface FuturesContractData {
     instrumentId: string;
     // productName: string;
     // exchange: string;
@@ -158,6 +160,29 @@ interface SpotDataResponse {
     error?: string;
 }
 
+interface HistoricalPriceCache {
+    [instrumentId: string]: {
+        prices: number[]; // 历史价格（最新在最后）
+        timestamps: string[]; // 对应时间戳
+    };
+}
+
+// 共享类型：相关性计算结果（两个子组件共用）
+export interface CorrelationResult {
+    contractPair: string;
+    contract1: string;
+    contract2: string;
+    correlation: number; // -1 ~ 1
+    dataPoints: number; // 数据点数量
+    isSignificant: boolean; // 是否显著（≥阈值）
+}
+
+// 共享配置（两个子组件共用）
+const CORRELATION_CONFIG = {
+    updateFrequency: 3000, // 3秒更新一次
+    maxHistoryPoints: 20, // 最大历史数据点
+    significanceThreshold: 5, // 显著性阈值（≥5个数据点）
+}
 
 // 期货分析指标虚拟数据（不变）
 const mockFuturesMetrics: FuturesAnalysisMetric[] = [
@@ -323,10 +348,162 @@ export default function FuturesAnalysisPage() {
     const [prevBasis, setPrevBasis] = useState<number>(-28.5); // 上一次基差（用于计算change）
     const [spotError, setSpotError] = useState<string | null>(null); // 现货数据错误信息
 
+
+    const [correlationResults, setCorrelationResults] = useState<CorrelationResult[]>([]); // 共享计算结果
+    const [correlationLoading, setCorrelationLoading] = useState<boolean>(true); // 共享加载状态
+    const [correlationError, setCorrelationError] = useState<string | null>(null); // 共享错误状态
+
+// 共享缓存（用 ref 避免重渲染，切换子组件不丢失）
+    const priceCacheRef = useRef<HistoricalPriceCache>({});
+    const realTimeDataRef = useRef<FuturesContractData[]>([]); // 存储最新实时期货数据
+    useEffect(() => {
+        realTimeDataRef.current = futuresData; // 同步WebSocket获取的最新数据
+    }, [futuresData]);
+
+// -------------------------- 新增2：初始化缓存 + 定时更新 --------------------------
+    useEffect(() => {
+        // 初始化缓存：从初始数据添加第一个价格点
+        const initCache = () => {
+            if (futuresData.length === 0) return;
+            futuresData.forEach(contract => {
+                if (!priceCacheRef.current[contract.instrumentId]) {
+                    priceCacheRef.current[contract.instrumentId] = {
+                        prices: [contract.lastPrice],
+                        timestamps: [contract.timestamp],
+                    };
+                }
+            });
+            calculateAllCorrelations(); // 首次计算相关性
+            setCorrelationLoading(false);
+        };
+
+        initCache();
+
+        // 定时更新缓存 + 重新计算相关性（仅父组件创建一次定时器）
+        const updateTimer = setInterval(() => {
+            try {
+                const latestData = realTimeDataRef.current;
+                console.log("【定时更新】最新数据：", latestData); // 新增日志
+
+                latestData.forEach(contract => {
+                    const cache = priceCacheRef.current[contract.instrumentId];
+                    if (!cache) {
+                        console.log("【缓存】新增合约：", contract.instrumentId);
+                        priceCacheRef.current[contract.instrumentId] = {
+                            prices: [contract.lastPrice],
+                            timestamps: [contract.timestamp]
+                        };
+                        return;
+                    }
+
+                    // 检查时间戳是否变化
+                    const lastCacheTimestamp = cache.timestamps.at(-1);
+                    console.log(
+                        `【缓存】合约${contract.instrumentId}：`,
+                        `缓存时间戳=${lastCacheTimestamp}，新时间戳=${contract.timestamp}`
+                    );
+
+                    if (lastCacheTimestamp !== contract.timestamp) {
+                        cache.prices.push(contract.lastPrice);
+                        cache.timestamps.push(contract.timestamp);
+                        console.log(`【缓存】更新后价格长度：${cache.prices.length}`); // 确认长度增加
+                    } else {
+                        console.log(`【缓存】时间戳相同，未更新：${contract.instrumentId}`);
+                    }
+                });
+
+                calculateAllCorrelations();
+            } catch (err) { /* ... */ }
+        }, CORRELATION_CONFIG.updateFrequency);
+
+        // 组件卸载时清除定时器（避免内存泄漏）
+        return () => clearInterval(updateTimer);
+    }, [CORRELATION_CONFIG.updateFrequency, CORRELATION_CONFIG.maxHistoryPoints, CORRELATION_CONFIG.significanceThreshold]); // 仅当初始 futuresData 变化时重新初始化
+
+// -------------------------- 新增3：皮尔逊相关系数计算（共享） --------------------------
+    const calculatePearsonCorrelation = (prices1: number[], prices2: number[]): number => {
+        const n = prices1.length;
+        if (n < 2 || prices2.length !== n) return NaN; // 数据点不足
+
+        let sum1 = 0, sum2 = 0, sum1Sq = 0, sum2Sq = 0, productSum = 0;
+        for (let i = 0; i < n; i++) {
+            const p1 = prices1[i], p2 = prices2[i];
+            if (isNaN(p1) || isNaN(p2) || p1 === 0 || p2 === 0) continue; // 过滤无效价格
+
+            sum1 += p1;
+            sum2 += p2;
+            sum1Sq += p1 ** 2;
+            sum2Sq += p2 ** 2;
+            productSum += p1 * p2;
+        }
+
+        // 计算协方差和标准差
+        const covariance = productSum - (sum1 * sum2) / n;
+        const stdDev1 = Math.sqrt(sum1Sq - (sum1 ** 2) / n);
+        const stdDev2 = Math.sqrt(sum2Sq - (sum2 ** 2) / n);
+
+        return stdDev1 && stdDev2 ? parseFloat((covariance / (stdDev1 * stdDev2)).toFixed(4)) : 0;
+    };
+
+// -------------------------- 新增4：计算所有合约对相关性（共享） --------------------------
+    const calculateAllCorrelations = () => {
+        setCorrelationLoading(true);
+        try {
+            const cache = priceCacheRef.current;
+            const contractIds = Object.keys(cache);
+            const results: CorrelationResult[] = [];
+
+            // 生成所有合约对（避免重复：A-B 和 B-A 只算一次）
+            for (let i = 0; i < contractIds.length; i++) {
+                for (let j = i + 1; j < contractIds.length; j++) {
+                    const contract1 = contractIds[i];
+                    const contract2 = contractIds[j];
+                    const { prices: prices1 } = cache[contract1];
+                    const { prices: prices2 } = cache[contract2];
+
+                    // 取较短的序列长度（确保数据点对齐）
+                    const minLength = Math.min(prices1.length, prices2.length);
+                    const validPrices1 = prices1.slice(-minLength);
+                    const validPrices2 = prices2.slice(-minLength);
+
+                    // 计算相关系数
+                    const correlation = calculatePearsonCorrelation(validPrices1, validPrices2);
+                    const isSignificant = minLength >= CORRELATION_CONFIG.significanceThreshold && !isNaN(correlation);
+
+                    results.push({
+                        contractPair: `${contract1}-${contract2}`,
+                        contract1,
+                        contract2,
+                        correlation: isNaN(correlation) ? 0 : correlation,
+                        dataPoints: minLength,
+                        isSignificant,
+                    });
+                }
+            }
+
+            // 按相关性绝对值降序排序（强相关在前）
+            results.sort((a, b) => Math.abs(b.correlation) - Math.abs(a.correlation));
+            setCorrelationResults(results);
+            setCorrelationError(null);
+        } catch (err) {
+            setCorrelationError(err instanceof Error ? err.message : '计算相关性失败');
+        } finally {
+            setCorrelationLoading(false);
+        }
+    };
+
+// -------------------------- 新增5：获取所有合约ID（用于筛选下拉框） --------------------------
+    const allContractIds = useMemo(() => {
+        return Object.keys(priceCacheRef.current).sort();
+    }, [futuresData]);
     // 初始化客户端标识（不变）
     useEffect(() => {
         setIsClient(true);
     }, []);
+
+    useEffect(() => {
+        console.log("【父组件】实时数据更新：", futuresData);
+    }, [futuresData]);
 
     // -------------------------- 修复2：WebSocket 连接逻辑（移除 socket 依赖，用 ref 操作实例） --------------------------
     const initWebSocket = useCallback(() => {
@@ -350,9 +527,9 @@ export default function FuturesAnalysisPage() {
         newSocket.onmessage = (event) => {
             //console.log("【前端】收到原始数据：", event.data);
             try {
-                const cleanedData = advancedCleanJsonData(event.data);
+                //const cleanedData = advancedCleanJsonData(event.data);
                 //console.log("clean之后的数据：", cleanedData);
-                const wsData: WebSocketFuturesData = JSON.parse(cleanedData);
+                const wsData: WebSocketFuturesData = JSON.parse(event.data);
                 //const staticInfo = contractStaticInfo[wsData.instrument_id] || {};
                 if (wsData && wsData.instrument_id) {
                     const formattedData: FuturesContractData = {
@@ -946,48 +1123,54 @@ export default function FuturesAnalysisPage() {
                                     </Card>
 
                                     {/* 其他分析表格（不变） */}
-                                    <Card>
-                                        <div className="p-5 border-b">
-                                            <h2 className="text-lg font-semibold">期货合约相关性分析</h2>
-                                        </div>
-                                        <div className="p-5">
-                                            <Table>
-                                                <TableHeader>
-                                                    <TableRow>
-                                                        <TableHead>合约对</TableHead>
-                                                        <TableHead>相关系数</TableHead>
-                                                        <TableHead>相关性强度</TableHead>
-                                                    </TableRow>
-                                                </TableHeader>
-                                                <TableBody>
-                                                    {futuresCorrelationData.map((item, index) => {
-                                                        let strength = "弱";
-                                                        let color = "bg-gray-100 text-gray-800";
-                                                        const significance = random() < 0.05 ? "显著" : "不显著";
+                                    {/*<Card>*/}
+                                    {/*    <div className="p-5 border-b">*/}
+                                    {/*        <h2 className="text-lg font-semibold">期货合约相关性分析</h2>*/}
+                                    {/*    </div>*/}
+                                    {/*    <div className="p-5">*/}
+                                    {/*        <Table>*/}
+                                    {/*            <TableHeader>*/}
+                                    {/*                <TableRow>*/}
+                                    {/*                    <TableHead>合约对</TableHead>*/}
+                                    {/*                    <TableHead>相关系数</TableHead>*/}
+                                    {/*                    <TableHead>相关性强度</TableHead>*/}
+                                    {/*                </TableRow>*/}
+                                    {/*            </TableHeader>*/}
+                                    {/*            <TableBody>*/}
+                                    {/*                {futuresCorrelationData.map((item, index) => {*/}
+                                    {/*                    let strength = "弱";*/}
+                                    {/*                    let color = "bg-gray-100 text-gray-800";*/}
+                                    {/*                    const significance = random() < 0.05 ? "显著" : "不显著";*/}
 
-                                                        if (Math.abs(item.correlation) > 0.7) {
-                                                            strength = "强";
-                                                            color = item.correlation > 0 ? "bg-green-100 text-green-800" : "bg-red-100 text-red-800";
-                                                        } else if (Math.abs(item.correlation) > 0.3) {
-                                                            strength = "中";
-                                                            color = item.correlation > 0 ? "bg-green-50 text-green-800" : "bg-red-50 text-red-800";
-                                                        }
+                                    {/*                    if (Math.abs(item.correlation) > 0.7) {*/}
+                                    {/*                        strength = "强";*/}
+                                    {/*                        color = item.correlation > 0 ? "bg-green-100 text-green-800" : "bg-red-100 text-red-800";*/}
+                                    {/*                    } else if (Math.abs(item.correlation) > 0.3) {*/}
+                                    {/*                        strength = "中";*/}
+                                    {/*                        color = item.correlation > 0 ? "bg-green-50 text-green-800" : "bg-red-50 text-red-800";*/}
+                                    {/*                    }*/}
 
-                                                        return (
-                                                            <TableRow key={index}>
-                                                                <TableCell>{item.contract1} - {item.contract2}</TableCell>
-                                                                <TableCell>{item.correlation.toFixed(2)}</TableCell>
-                                                                <TableCell>
-                                                                    <Badge className={color}>{strength} {item.correlation > 0 ? "正相关" : "负相关"}</Badge>
-                                                                </TableCell>
-                                                            </TableRow>
-                                                        );
-                                                    })}
-                                                </TableBody>
-                                            </Table>
-                                        </div>
-                                    </Card>
-
+                                    {/*                    return (*/}
+                                    {/*                        <TableRow key={index}>*/}
+                                    {/*                            <TableCell>{item.contract1} - {item.contract2}</TableCell>*/}
+                                    {/*                            <TableCell>{item.correlation.toFixed(2)}</TableCell>*/}
+                                    {/*                            <TableCell>*/}
+                                    {/*                                <Badge className={color}>{strength} {item.correlation > 0 ? "正相关" : "负相关"}</Badge>*/}
+                                    {/*                            </TableCell>*/}
+                                    {/*                        </TableRow>*/}
+                                    {/*                    );*/}
+                                    {/*                })}*/}
+                                    {/*            </TableBody>*/}
+                                    {/*        </Table>*/}
+                                    {/*    </div>*/}
+                                    {/*</Card>*/}
+                                    <FuturesCorrelationTable
+                                        correlationResults={correlationResults} // 确保属性名正确（复数形式）
+                                        loading={correlationLoading}
+                                        allContractIds={allContractIds}
+                                        onRefresh={calculateAllCorrelations}
+                                        updateFrequency={CORRELATION_CONFIG.updateFrequency}
+                                    />
                                     <Card>
                                         <div className="p-5 border-b">
                                             <h2 className="text-lg font-semibold">期货品种聚类分析</h2>
@@ -1089,59 +1272,69 @@ export default function FuturesAnalysisPage() {
                             {activeTab === 'trend' && (
                                 <FuturesTrendForecast />
                             )}
+                            {/*{activeTab === 'correlation' && (*/}
+                            {/*    <div className="space-y-6">*/}
+                            {/*        <div>*/}
+                            {/*            <h1 className="text-2xl font-bold">期货合约相关性分析</h1>*/}
+                            {/*            <p className="text-gray-500 dark:text-gray-400">*/}
+                            {/*                分析不同期货合约之间的价格联动关系（如沪深300与上证50、原油与甲醇）*/}
+                            {/*            </p>*/}
+                            {/*        </div>*/}
+                            {/*        <Card>*/}
+                            {/*            <div className="p-5">*/}
+                            {/*                <Table>*/}
+                            {/*                    <TableHeader>*/}
+                            {/*                        <TableRow>*/}
+                            {/*                            <TableHead>期货合约对</TableHead>*/}
+                            {/*                            <TableHead>相关系数</TableHead>*/}
+                            {/*                            <TableHead>相关性强度</TableHead>*/}
+                            {/*                            <TableHead>统计显著性</TableHead>*/}
+                            {/*                        </TableRow>*/}
+                            {/*                    </TableHeader>*/}
+                            {/*                    <TableBody>*/}
+                            {/*                        {futuresCorrelationData.map((item, index) => {*/}
+                            {/*                            let strength = "弱";*/}
+                            {/*                            let color = "bg-gray-100 text-gray-800";*/}
+                            {/*                            const significance = random() < 0.05 ? "显著" : "不显著";*/}
+
+                            {/*                            if (Math.abs(item.correlation) > 0.7) {*/}
+                            {/*                                strength = "强";*/}
+                            {/*                                color = item.correlation > 0 ? "bg-green-100 text-green-800" : "bg-red-100 text-red-800";*/}
+                            {/*                            } else if (Math.abs(item.correlation) > 0.3) {*/}
+                            {/*                                strength = "中";*/}
+                            {/*                                color = item.correlation > 0 ? "bg-green-50 text-green-800" : "bg-red-50 text-red-800";*/}
+                            {/*                            }*/}
+
+                            {/*                            return (*/}
+                            {/*                                <TableRow key={index}>*/}
+                            {/*                                    <TableCell>{item.contract1} - {item.contract2}</TableCell>*/}
+                            {/*                                    <TableCell>{item.correlation.toFixed(2)}</TableCell>*/}
+                            {/*                                    <TableCell>*/}
+                            {/*                                        <Badge className={color}>{strength} {item.correlation > 0 ? "正相关" : "负相关"}</Badge>*/}
+                            {/*                                    </TableCell>*/}
+                            {/*                                    <TableCell>*/}
+                            {/*                                        <Badge className={significance === "显著" ? "bg-blue-100 text-blue-800" : "bg-gray-100 text-gray-800"}>*/}
+                            {/*                                            {significance}*/}
+                            {/*                                        </Badge>*/}
+                            {/*                                    </TableCell>*/}
+                            {/*                                </TableRow>*/}
+                            {/*                            );*/}
+                            {/*                        })}*/}
+                            {/*                    </TableBody>*/}
+                            {/*                </Table>*/}
+                            {/*            </div>*/}
+                            {/*        </Card>*/}
+                            {/*    </div>*/}
+                            {/*)}*/}
                             {activeTab === 'correlation' && (
-                                <div className="space-y-6">
-                                    <div>
-                                        <h1 className="text-2xl font-bold">期货合约相关性分析</h1>
-                                        <p className="text-gray-500 dark:text-gray-400">
-                                            分析不同期货合约之间的价格联动关系（如沪深300与上证50、原油与甲醇）
-                                        </p>
-                                    </div>
-                                    <Card>
-                                        <div className="p-5">
-                                            <Table>
-                                                <TableHeader>
-                                                    <TableRow>
-                                                        <TableHead>期货合约对</TableHead>
-                                                        <TableHead>相关系数</TableHead>
-                                                        <TableHead>相关性强度</TableHead>
-                                                        <TableHead>统计显著性</TableHead>
-                                                    </TableRow>
-                                                </TableHeader>
-                                                <TableBody>
-                                                    {futuresCorrelationData.map((item, index) => {
-                                                        let strength = "弱";
-                                                        let color = "bg-gray-100 text-gray-800";
-                                                        const significance = random() < 0.05 ? "显著" : "不显著";
-
-                                                        if (Math.abs(item.correlation) > 0.7) {
-                                                            strength = "强";
-                                                            color = item.correlation > 0 ? "bg-green-100 text-green-800" : "bg-red-100 text-red-800";
-                                                        } else if (Math.abs(item.correlation) > 0.3) {
-                                                            strength = "中";
-                                                            color = item.correlation > 0 ? "bg-green-50 text-green-800" : "bg-red-50 text-red-800";
-                                                        }
-
-                                                        return (
-                                                            <TableRow key={index}>
-                                                                <TableCell>{item.contract1} - {item.contract2}</TableCell>
-                                                                <TableCell>{item.correlation.toFixed(2)}</TableCell>
-                                                                <TableCell>
-                                                                    <Badge className={color}>{strength} {item.correlation > 0 ? "正相关" : "负相关"}</Badge>
-                                                                </TableCell>
-                                                                <TableCell>
-                                                                    <Badge className={significance === "显著" ? "bg-blue-100 text-blue-800" : "bg-gray-100 text-gray-800"}>
-                                                                        {significance}
-                                                                    </Badge>
-                                                                </TableCell>
-                                                            </TableRow>
-                                                        );
-                                                    })}
-                                                </TableBody>
-                                            </Table>
-                                        </div>
-                                    </Card>
-                                </div>
+                                <FuturesCorrelationPage
+                                    correlationResults={correlationResults} // 父组件共享结果（与表格相同）
+                                    loading={correlationLoading} // 父组件共享加载状态（与表格相同）
+                                    error={correlationError} // 父组件共享错误状态
+                                    allContractIds={allContractIds} // 父组件共享合约ID（与表格相同）
+                                    onRefresh={calculateAllCorrelations} // 父组件刷新函数（与表格相同）
+                                    updateFrequency={CORRELATION_CONFIG.updateFrequency} // 父组件配置
+                                />
                             )}
 
                             {activeTab === 'cluster' && (
