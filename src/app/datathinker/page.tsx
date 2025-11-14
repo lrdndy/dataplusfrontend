@@ -58,6 +58,7 @@ import { useRouter } from 'next/navigation';
 import FactorMiningComponent from "@/components/FactorMiningComponent";
 import FuturesCorrelationPage from "@/components/FuturesCorrelationPage";
 import FuturesCorrelationTable from "@/components/FuturesCorrelationTable";
+import FuturesOverview from "@/components/FuturesOverview";
 // 固定种子的随机数生成器（保留）
 const createRandomGenerator = (seed: number) => {
     return () => {
@@ -943,116 +944,8 @@ export default function FuturesAnalysisPage() {
                             {/* 期货分析概览（不变） */}
                             {activeTab === 'overview' && (
                                 <div className="space-y-6">
-                                    <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
-                                        <div>
-                                            <h1 className="text-2xl font-bold">期货交易数据分析概览</h1>
-                                            <p className="text-gray-500 dark:text-gray-400">
-                                                多维度分析期货合约级别数据（价格/持仓量/成交量），挖掘市场洞察
-                                            </p>
-                                        </div>
-                                        <div className="flex flex-wrap gap-3">
-                                            <Select value={selectedContract} onValueChange={setSelectedContract}>
-                                                <SelectTrigger className="w-[140px]">
-                                                    <SelectValue placeholder="选择期货合约" />
-                                                </SelectTrigger>
-                                                <SelectContent className="bg-white">
-                                                    <SelectItem value="all">所有合约</SelectItem>
-                                                    {futuresData.map(contract => (
-                                                        <SelectItem key={contract.instrumentId} value={contract.instrumentId}>
-                                                            {contract.instrumentId}
-                                                            {/*{contract.instrumentId} - {contract.productName}*/}
-                                                        </SelectItem>
-                                                    ))}
-                                                </SelectContent>
-                                            </Select>
-                                            <Select value={dateRange} onValueChange={setDateRange}>
-                                                <SelectTrigger className="w-[120px]">
-                                                    <SelectValue placeholder="时间范围" />
-                                                </SelectTrigger>
-                                                <SelectContent className="bg-white">
-                                                    <SelectItem value="7d">近7天</SelectItem>
-                                                    <SelectItem value="30d">近30天</SelectItem>
-                                                    <SelectItem value="90d">近90天</SelectItem>
-                                                    <SelectItem value="1y">近1年</SelectItem>
-                                                </SelectContent>
-                                            </Select>
-                                            <Button onClick={() => {
-                                                if (analysisLoading) return;
-                                                setAnalysisLoading(true);
-                                                setProgress(0);
-                                                const interval = setInterval(() => {
-                                                    setProgress(prev => {
-                                                        if (prev >= 100) {
-                                                            clearInterval(interval);
-                                                            setAnalysisLoading(false);
-                                                            return 100;
-                                                        }
-                                                        return prev + 10;
-                                                    });
-                                                }, 150);
-                                            }}>
-                                                <RefreshCw className="mr-2 h-4 w-4" />
-                                                刷新分析
-                                            </Button>
-                                            {/* 现货数据刷新按钮 */}
-                                            {/*<Button variant="secondary" onClick={} disabled={spotLoading}>*/}
-                                            {/*    <RefreshCw className={`mr-2 h-4 w-4 ${spotLoading ? 'animate-spin' : ''}`} />*/}
-                                            {/*    {spotLoading ? '刷新现货中' : '刷新现货'}*/}
-                                            {/*</Button>*/}
-                                            <DropdownMenu>
-                                                <DropdownMenuTrigger asChild>
-                                                    <Button variant="secondary">
-                                                        <Download className="mr-2 h-4 w-4" />
-                                                        导出报告
-                                                    </Button>
-                                                </DropdownMenuTrigger>
-                                                <DropdownMenuContent className="bg-white">
-                                                    <DropdownMenuItem onClick={() => exportReport('pdf')}>
-                                                        PDF格式（期货分析）
-                                                    </DropdownMenuItem>
-                                                    <DropdownMenuItem onClick={() => exportReport('excel')}>
-                                                        Excel格式（含原始合约数据）
-                                                    </DropdownMenuItem>
-                                                </DropdownMenuContent>
-                                            </DropdownMenu>
-                                        </div>
-                                    </div>
-
-                                    {/* 显示现货数据错误信息 */}
-                                    {spotError && (
-                                        <Card className="bg-red-50 dark:bg-red-900/20 p-4 border-l-4 border-red-500">
-                                            <div className="flex items-start gap-3">
-                                                <AlertTriangle className="h-5 w-5 text-red-500 mt-0.5" />
-                                                <p className="text-sm text-red-600 dark:text-red-400">
-                                                    现货数据获取失败: {spotError}
-                                                </p>
-                                            </div>
-                                        </Card>
-                                    )}
-
                                     {/* 期货关键指标卡片（不变） */}
-                                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                                        {mockFuturesMetrics.map(metric => (
-                                            <Card key={metric.id} className="p-5 hover:shadow-md transition-shadow">
-                                                <div className="flex items-center justify-between mb-3">
-                                                    <h3 className="text-sm font-medium text-gray-500 dark:text-gray-400">{metric.name}</h3>
-                                                    {getImportanceBadge(metric.importance)}
-                                                </div>
-                                                <div className="flex items-end justify-between">
-                                                    <p className="text-2xl font-bold">
-                                                        {/* 基差加载时显示"加载中" */}
-                                                        {metric.id === 'm3' && spotLoading
-                                                            ? <span className="text-gray-400">加载中...</span>
-                                                            : metric.value.toLocaleString(undefined, { maximumFractionDigits: 2 })}
-                                                        {metric.unit}
-                                                    </p>
-                                                    <div>
-                                                        {getChangeIndicator(metric.change)}
-                                                    </div>
-                                                </div>
-                                            </Card>
-                                        ))}
-                                    </div>
+                                    <FuturesOverview futuresData={futuresData} />
 
                                     {/* 期货合约数据表格（不变） */}
                                     <Card>
