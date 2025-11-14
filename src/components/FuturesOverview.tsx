@@ -7,7 +7,8 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigge
 import { RefreshCw, Download, AlertTriangle } from 'lucide-react';
 import * as echarts from 'echarts';
 import type { ECharts } from 'echarts';
-
+import { useSession } from 'next-auth/react';
+import type { User } from 'next-auth'; // 导入User类型
 // ECharts Tooltip 参数类型
 interface EChartsTooltipParam {
   name: string;
@@ -228,6 +229,32 @@ const FuturesOverview: React.FC<FuturesOverviewProps> = ({ futuresData }) => {
   const [positionData, setPositionData] = useState<PositionData | null>(null);
   const chartRef = useRef<HTMLDivElement>(null);
   const chartInstance = useRef<ECharts | null>(null);
+  const { data: session } = useSession();
+  // 断言session.user为“User+privilege”类型，并用可选链兜底
+  const userWithPrivilege = session?.user as (User & { privilege?: boolean }) | undefined;
+  const hasPrivilege = userWithPrivilege?.privilege ?? false;
+
+  const dateRangeOptions = [
+    { value: '7d', label: 'Last 7 Days' },
+    { value: '30d', label: 'Last 30 Days' },
+    { value: '90d', label: 'About 1 Quarter' },
+    // 有权限才显示90d及以上选项
+    ...(hasPrivilege
+        ? [
+          { value: '180d', label: 'About half year' },
+          { value: '1y', label: 'About 1 year' }
+        ]
+        : [])
+  ];
+  useEffect(() => {
+    // 定义无权限时的“受限范围”
+    const restrictedRanges = ['90d', '180d', '1y'];
+    // 若用户无权限，且当前选中的是受限范围，重置为默认7d
+    if (!hasPrivilege && restrictedRanges.includes(dateRange)) {
+      setDateRange('7d');
+    }
+  }, [hasPrivilege, dateRange]); // 监听权限和日期变化
+
 
   // 数据请求逻辑
   const fetchPositionData = async () => {
@@ -504,11 +531,11 @@ const FuturesOverview: React.FC<FuturesOverviewProps> = ({ futuresData }) => {
                 <SelectValue placeholder="Date Range" />
               </SelectTrigger>
               <SelectContent className="bg-white dark:bg-gray-200">
-                <SelectItem value="7d">Last 7 Days</SelectItem>
-                <SelectItem value="30d">Last 30 Days</SelectItem>
-                <SelectItem value="90d">About 1 Quarter</SelectItem>
-                <SelectItem value="180d">About half year</SelectItem>
-                <SelectItem value="1y">About 1 year</SelectItem>
+                {dateRangeOptions.map(option => (
+                    <SelectItem key={option.value} value={option.value}>
+                      {option.label}
+                    </SelectItem>
+                ))}
               </SelectContent>
             </Select>
 
