@@ -248,7 +248,7 @@ const FuturesOverview: React.FC<FuturesOverviewProps> = ({ futuresData }) => {
   ];
   useEffect(() => {
     // 定义无权限时的“受限范围”
-    const restrictedRanges = ['90d', '180d', '1y'];
+    const restrictedRanges = [ '180d', '1y'];
     // 若用户无权限，且当前选中的是受限范围，重置为默认7d
     if (!hasPrivilege && restrictedRanges.includes(dateRange)) {
       setDateRange('7d');

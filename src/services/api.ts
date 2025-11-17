@@ -16,6 +16,20 @@ const ctp_api = axios.create({
     },
     timeout: 10000,
 });
+export interface StockItem { // 股票数据的单条记录类型
+    date: string;
+    open: number;
+    close: number;
+    high: number;
+    low: number;
+}
+export interface StockResponse { // 股票接口的完整响应类型
+    stock_code: string;
+    stock_name: string;
+    data: StockItem[];
+    message: string;
+    error?: string; // 可选：后端可能返回的错误信息字段
+}
 
 // 示例：获取hello接口数据
 export const getHelloMessage = async () => {
@@ -29,9 +43,40 @@ export const getServerTime = async () => {
     return response.data;
 };
 
-export const getStockData = async () => {
-    const response = await api.get('/stock/');
-    return response.data;
+export const getStockData = async (stockCode: string): Promise<StockResponse> => {
+    try {
+        // 发送POST请求：基础地址 + /stock/ → 最终地址：http://127.0.0.1:8000/api/stock/
+        const response = await api.post<StockResponse>('/stock/', {
+            stock_code: stockCode, // 参数名与后端保持一致（必须和后端接收的key相同）
+        });
+
+        // Axios会自动解析JSON，直接返回数据
+        return response.data;
+
+    } catch (error) {
+        // 精细化错误处理（区分网络错误、后端响应错误）
+        if (axios.isAxiosError(error)) {
+            // 情况1：有响应（如400参数错误、404路径错误、500后端异常）
+            if (error.response) {
+                const errorMsg =
+                    error.response.data?.error || // 优先取后端返回的error字段
+                    `请求失败 [${error.response.status}]: ${error.response.statusText}`;
+                throw new Error(errorMsg);
+            }
+            // 情况2：无响应（如网络中断、超时）
+            else if (error.request) {
+                throw new Error('网络异常：无法连接到后端服务，请检查后端是否启动');
+            }
+            // 情况3：请求配置错误（如参数格式错）
+            else {
+                throw new Error(`请求配置错误：${error.message}`);
+            }
+        }
+        // 非Axios错误（如类型错误）
+        else {
+            throw new Error(`未知错误：${error instanceof Error ? error.message : '获取股票数据失败'}`);
+        }
+    }
 };
 
 

@@ -765,39 +765,39 @@ export default function FuturesAnalysisPage() {
                             )}
                         </div>
 
-                        <TooltipProvider>
-                            <Tooltip>
-                                <TooltipTrigger asChild>
-                                    <Button variant="ghost" size="icon" className="relative">
-                                        <Bell className="h-5 w-5" />
-                                        <span className="absolute top-1 right-1 w-2 h-2 bg-red-500 rounded-full"></span>
-                                    </Button>
-                                </TooltipTrigger>
-                                <TooltipContent>
-                                    <p>期货行情通知</p>
-                                </TooltipContent>
-                            </Tooltip>
-                        </TooltipProvider>
+                        {/*<TooltipProvider>*/}
+                        {/*    <Tooltip>*/}
+                        {/*        <TooltipTrigger asChild>*/}
+                        {/*            <Button variant="ghost" size="icon" className="relative">*/}
+                        {/*                <Bell className="h-5 w-5" />*/}
+                        {/*                <span className="absolute top-1 right-1 w-2 h-2 bg-red-500 rounded-full"></span>*/}
+                        {/*            </Button>*/}
+                        {/*        </TooltipTrigger>*/}
+                        {/*        <TooltipContent>*/}
+                        {/*            <p>期货行情通知</p>*/}
+                        {/*        </TooltipContent>*/}
+                        {/*    </Tooltip>*/}
+                        {/*</TooltipProvider>*/}
 
-                        <DropdownMenu>
-                            <DropdownMenuTrigger asChild>
-                                <Button variant="ghost" className="relative h-8 w-8 rounded-full">
-                                    <Avatar className="h-8 w-8">
-                                        <img src="https://picsum.photos/id/1005/200/200" alt="用户头像" className="object-cover" />
-                                    </Avatar>
-                                </Button>
-                            </DropdownMenuTrigger>
-                            <DropdownMenuContent align="end" className="bg-white">
-                                <DropdownMenuItem>
-                                    <User className="mr-2 h-4 w-4" />
-                                    <span>个人资料</span>
-                                </DropdownMenuItem>
-                                <DropdownMenuItem>
-                                    <Settings className="mr-2 h-4 w-4" />
-                                    <span>期货分析设置</span>
-                                </DropdownMenuItem>
-                            </DropdownMenuContent>
-                        </DropdownMenu>
+                        {/*<DropdownMenu>*/}
+                        {/*    <DropdownMenuTrigger asChild>*/}
+                        {/*        <Button variant="ghost" className="relative h-8 w-8 rounded-full">*/}
+                        {/*            <Avatar className="h-8 w-8">*/}
+                        {/*                <img src="https://picsum.photos/id/1005/200/200" alt="用户头像" className="object-cover" />*/}
+                        {/*            </Avatar>*/}
+                        {/*        </Button>*/}
+                        {/*    </DropdownMenuTrigger>*/}
+                        {/*    <DropdownMenuContent align="end" className="bg-white">*/}
+                        {/*        <DropdownMenuItem>*/}
+                        {/*            <User className="mr-2 h-4 w-4" />*/}
+                        {/*            <span>个人资料</span>*/}
+                        {/*        </DropdownMenuItem>*/}
+                        {/*        <DropdownMenuItem>*/}
+                        {/*            <Settings className="mr-2 h-4 w-4" />*/}
+                        {/*            <span>期货分析设置</span>*/}
+                        {/*        </DropdownMenuItem>*/}
+                        {/*    </DropdownMenuContent>*/}
+                        {/*</DropdownMenu>*/}
                     </div>
                 </div>
             </header>
@@ -1108,7 +1108,7 @@ export default function FuturesAnalysisPage() {
                                             </p>
                                         </div>
                                         <div className="flex gap-3">
-                                            <Button onClick={() => exportReport('excel')}>
+                                            <Button className="hidden" onClick={() => exportReport('excel')}>
                                                 <Download className="mr-2 h-4 w-4" />
                                                 导出期货统计数据
                                             </Button>
