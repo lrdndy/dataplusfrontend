@@ -30,6 +30,7 @@ const StockIndex: React.FC = () => {
     const [updateTime, setUpdateTime] = useState<string>('');
     const [dividendNote, setDividendNote] = useState<string>('');
 
+
     // 新增1：请求并发控制（避免前一次请求未完成时发起新请求）
     const [isFetching, setIsFetching] = useState<boolean>(false);
     // 新增2：定时器引用（用于组件卸载时清除，防止内存泄漏）
@@ -56,7 +57,7 @@ const StockIndex: React.FC = () => {
 
             // 调用真实API接口
             const apiData: StockIndexCalculationResponse = await getNewStockIndexData();
-
+            console.log(apiData);
             // 校验接口业务状态（真实接口可能返回warning，需兼容）
             if (apiData.status !== 'success' && apiData.status !== 'warning') {
                 throw new Error(`数据异常：${apiData.msg || '接口返回未知状态'}`);

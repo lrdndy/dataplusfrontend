@@ -505,7 +505,7 @@ export default function FuturesAnalysisPage() {
     useEffect(() => {
         console.log("【父组件】实时数据更新：", futuresData);
     }, [futuresData]);
-
+    const ctpWSBaseUrl = process.env.NEXT_PUBLIC_CTP_WS_URL!;
     // -------------------------- 修复2：WebSocket 连接逻辑（移除 socket 依赖，用 ref 操作实例） --------------------------
     const initWebSocket = useCallback(() => {
         // 关闭现有连接（从 ref 获取实例）
@@ -514,7 +514,7 @@ export default function FuturesAnalysisPage() {
         }
 
         setConnectionStatus('connecting');
-        const newSocket = new WebSocket("ws://127.0.0.1:8001/depth_md/all");
+        const newSocket = new WebSocket(ctpWSBaseUrl);
 
         // 连接成功
         newSocket.onopen = () => {
