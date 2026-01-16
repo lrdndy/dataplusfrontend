@@ -222,7 +222,7 @@ const getChangeStyle = (value: number | string) => {
 
 const FuturesOverview: React.FC<FuturesOverviewProps> = ({ futuresData }) => {
   // 状态管理（英文命名）
-  const [selectedContract, setSelectedContract] = useState('IF2512');
+  const [selectedContract, setSelectedContract] = useState('all'); //默认
   const [dateRange, setDateRange] = useState('7d');
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');

@@ -4,7 +4,8 @@ import "./globals.css";
 // 导入客户端SessionProvider
 import { SessionProvider } from '@/providers/SessionProvider';
 import { getServerSession } from 'next-auth/next';
-import { authOptions } from './api/auth/[...nextauth]/route';
+import { authOptions } from '@/lib/auth';
+
 const geistSans = Geist({
   variable: "--font-geist-sans",
   subsets: ["latin"],

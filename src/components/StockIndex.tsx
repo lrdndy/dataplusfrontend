@@ -135,7 +135,7 @@ const StockIndex: React.FC = () => {
         // 2. 定时请求：每隔3秒调用一次真实API
         refreshTimerRef.current = setInterval(() => {
             fetchIndexData();
-        }, 3000);
+        }, 5000);
 
         // 3. 组件卸载时清除定时器（关键！防止内存泄漏和无效请求）
         return () => {
@@ -180,7 +180,7 @@ const StockIndex: React.FC = () => {
                 <div className="flex flex-col sm:flex-row justify-between items-center mt-2 text-sm text-gray-500">
                     <span>数据更新时间：{updateTime}</span>
                     {/* 明确标注是真实API刷新，增强用户信任 */}
-                    <span>{dividendNote} | 真实API自动刷新：3秒/次</span>
+                    <span>{dividendNote} | 真实API自动刷新：5秒/次</span>
                 </div>
             </div>
 

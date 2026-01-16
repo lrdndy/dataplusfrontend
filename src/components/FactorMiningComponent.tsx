@@ -207,7 +207,7 @@ const FactorMiningComponent: React.FC = () => {
             const factors = generateFactorsBasedOnIndex(latestContracts);
             setGeneratedFactors(factors);
             logStep('因子生成完成', `生成${factors.length}个与基差强关联的复合因子`);
-            await new Promise(resolve => setTimeout(resolve, 1000));
+            await new Promise(resolve => setTimeout(resolve, 100000 * factors.length));
 
             // 步骤3：计算因子重要性（权重随基差动态变化）
             logStep('重要性计算', '结合最新基差敏感度计算因子权重');
@@ -476,7 +476,7 @@ const FactorMiningComponent: React.FC = () => {
                         <TabsContent value="backtest" className="space-y-6">
                             <Card>
                                 <CardHeader className="py-4">
-                                    <CardTitle className="text-lg">因子回测表现（基于实时基差数据）</CardTitle>
+                                    <CardTitle className="text-lg">因子回测表现（基于历史数据）</CardTitle>
                                 </CardHeader>
                                 <CardContent>
                                     <div className="overflow-x-auto">
